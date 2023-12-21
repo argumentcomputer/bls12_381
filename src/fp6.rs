@@ -102,7 +102,7 @@ impl Fp6 {
     }
 
     #[cfg(feature = "pairings")]
-    pub(crate) fn random(mut rng: impl RngCore) -> Self {
+    pub fn random(mut rng: impl RngCore) -> Self {
         Fp6 {
             c0: Fp2::random(&mut rng),
             c1: Fp2::random(&mut rng),

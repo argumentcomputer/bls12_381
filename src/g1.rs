@@ -26,8 +26,8 @@ use crate::Scalar;
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
 pub struct G1Affine {
-    pub(crate) x: Fp,
-    pub(crate) y: Fp,
+    pub x: Fp,
+    pub y: Fp,
     infinity: Choice,
 }
 
@@ -440,9 +440,9 @@ fn endomorphism(p: &G1Affine) -> G1Affine {
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
 pub struct G1Projective {
-    pub(crate) x: Fp,
-    pub(crate) y: Fp,
-    pub(crate) z: Fp,
+    pub x: Fp,
+    pub y: Fp,
+    pub z: Fp,
 }
 
 impl Default for G1Projective {

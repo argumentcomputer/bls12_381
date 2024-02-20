@@ -53,7 +53,7 @@ pub mod fp;
 #[cfg(feature = "groups")]
 pub mod fp2;
 #[cfg(feature = "groups")]
-mod g1;
+pub mod g1;
 #[cfg(feature = "groups")]
 mod g2;
 

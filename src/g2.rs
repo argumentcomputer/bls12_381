@@ -29,7 +29,7 @@ use crate::Scalar;
 pub struct G2Affine {
     pub x: Fp2,
     pub y: Fp2,
-    infinity: Choice,
+    pub infinity: Choice,
 }
 
 impl Default for G2Affine {
@@ -844,7 +844,7 @@ impl G2Projective {
         acc
     }
 
-    fn psi(&self) -> G2Projective {
+    pub fn psi(&self) -> G2Projective {
         // 1 / ((u+1) ^ ((q-1)/3))
         let psi_coeff_x = Fp2 {
             c0: Fp::zero(),
@@ -887,7 +887,7 @@ impl G2Projective {
         }
     }
 
-    fn psi2(&self) -> G2Projective {
+    pub fn psi2(&self) -> G2Projective {
         // 1 / 2 ^ ((q-1)/3)
         let psi2_coeff_x = Fp2 {
             c0: Fp::from_raw_unchecked([

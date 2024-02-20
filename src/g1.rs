@@ -28,7 +28,7 @@ use crate::Scalar;
 pub struct G1Affine {
     pub x: Fp,
     pub y: Fp,
-    infinity: Choice,
+    pub infinity: Choice,
 }
 
 impl Default for G1Affine {
@@ -427,7 +427,7 @@ pub const BETA: Fp = Fp::from_raw_unchecked([
     0x051b_a4ab_241b_6160,
 ]);
 
-fn endomorphism(p: &G1Affine) -> G1Affine {
+pub fn endomorphism(p: &G1Affine) -> G1Affine {
     // Endomorphism of the points on the curve.
     // endomorphism_p(x,y) = (BETA * x, y)
     // where BETA is a non-trivial cubic root of unity in Fq.

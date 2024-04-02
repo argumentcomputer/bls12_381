@@ -8,10 +8,18 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::util::{adc, mac, sbb};
 
+extern "C" {
+    fn syscall_bls12381_fp_add(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp_sub(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp_mul(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp_div(p: *mut u32, q: *const u32);
+}
+
 // The internal representation of this type is six 64-bit unsigned
 // integers in little-endian order. `Fp` values are always in
 // Montgomery form; i.e., Scalar(a) = aR mod p, with R = 2^384.
 #[derive(Copy, Clone)]
+#[repr(transparent)] // NOTE: this might be *technically* required for ensuring the memory layout used in the zkvm is valid?
 pub struct Fp(pub(crate) [u64; 6]);
 
 impl fmt::Debug for Fp {
@@ -344,17 +352,27 @@ impl Fp {
     /// element, returning None in the case that this element
     /// is zero.
     pub fn invert(&self) -> CtOption<Self> {
-        // Exponentiate by p - 2
-        let t = self.pow_vartime(&[
-            0xb9fe_ffff_ffff_aaa9,
-            0x1eab_fffe_b153_ffff,
-            0x6730_d2a0_f6b0_f624,
-            0x6477_4b84_f385_12bf,
-            0x4b1b_a7b6_434b_acd7,
-            0x1a01_11ea_397f_e69a,
-        ]);
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = Self::one();
+                unsafe {
+                    syscall_bls12381_fp_div(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                }
+                CtOption::new(out, !self.is_zero())
+            } else {
+                // Exponentiate by p - 2
+                let t = self.pow_vartime(&[
+                    0xb9fe_ffff_ffff_aaa9,
+                    0x1eab_fffe_b153_ffff,
+                    0x6730_d2a0_f6b0_f624,
+                    0x6477_4b84_f385_12bf,
+                    0x4b1b_a7b6_434b_acd7,
+                    0x1a01_11ea_397f_e69a,
+                ]);
 
-        CtOption::new(t, !self.is_zero())
+                CtOption::new(t, !self.is_zero())
+            }
+        }
     }
 
     #[inline]
@@ -379,17 +397,27 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn add(&self, rhs: &Fp) -> Fp {
-        let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
-        let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
-        let (d2, carry) = adc(self.0[2], rhs.0[2], carry);
-        let (d3, carry) = adc(self.0[3], rhs.0[3], carry);
-        let (d4, carry) = adc(self.0[4], rhs.0[4], carry);
-        let (d5, _) = adc(self.0[5], rhs.0[5], carry);
+    pub fn add(&self, rhs: &Fp) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = *self;
+                unsafe {
+                    syscall_bls12381_fp_add(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
+                let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
+                let (d2, carry) = adc(self.0[2], rhs.0[2], carry);
+                let (d3, carry) = adc(self.0[3], rhs.0[3], carry);
+                let (d4, carry) = adc(self.0[4], rhs.0[4], carry);
+                let (d5, _) = adc(self.0[5], rhs.0[5], carry);
 
-        // Attempt to subtract the modulus, to ensure the value
-        // is smaller than the modulus.
-        (&Fp([d0, d1, d2, d3, d4, d5])).subtract_p()
+                // Attempt to subtract the modulus, to ensure the value
+                // is smaller than the modulus.
+                (&Fp([d0, d1, d2, d3, d4, d5])).subtract_p()
+            }
+        }
     }
 
     #[inline]
@@ -418,8 +446,18 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn sub(&self, rhs: &Fp) -> Fp {
-        (&rhs.neg()).add(self)
+    pub fn sub(&self, rhs: &Fp) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = *self;
+                unsafe {
+                    syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                (&rhs.neg()).add(self)
+            }
+        }
     }
 
     /// Returns `c = a.zip(b).fold(0, |acc, (a_i, b_i)| acc + a_i * b_i)`.
@@ -562,50 +600,60 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn mul(&self, rhs: &Fp) -> Fp {
-        let (t0, carry) = mac(0, self.0[0], rhs.0[0], 0);
-        let (t1, carry) = mac(0, self.0[0], rhs.0[1], carry);
-        let (t2, carry) = mac(0, self.0[0], rhs.0[2], carry);
-        let (t3, carry) = mac(0, self.0[0], rhs.0[3], carry);
-        let (t4, carry) = mac(0, self.0[0], rhs.0[4], carry);
-        let (t5, t6) = mac(0, self.0[0], rhs.0[5], carry);
+    pub fn mul(&self, rhs: &Fp) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = *self;
+                unsafe {
+                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                let (t0, carry) = mac(0, self.0[0], rhs.0[0], 0);
+                let (t1, carry) = mac(0, self.0[0], rhs.0[1], carry);
+                let (t2, carry) = mac(0, self.0[0], rhs.0[2], carry);
+                let (t3, carry) = mac(0, self.0[0], rhs.0[3], carry);
+                let (t4, carry) = mac(0, self.0[0], rhs.0[4], carry);
+                let (t5, t6) = mac(0, self.0[0], rhs.0[5], carry);
 
-        let (t1, carry) = mac(t1, self.0[1], rhs.0[0], 0);
-        let (t2, carry) = mac(t2, self.0[1], rhs.0[1], carry);
-        let (t3, carry) = mac(t3, self.0[1], rhs.0[2], carry);
-        let (t4, carry) = mac(t4, self.0[1], rhs.0[3], carry);
-        let (t5, carry) = mac(t5, self.0[1], rhs.0[4], carry);
-        let (t6, t7) = mac(t6, self.0[1], rhs.0[5], carry);
+                let (t1, carry) = mac(t1, self.0[1], rhs.0[0], 0);
+                let (t2, carry) = mac(t2, self.0[1], rhs.0[1], carry);
+                let (t3, carry) = mac(t3, self.0[1], rhs.0[2], carry);
+                let (t4, carry) = mac(t4, self.0[1], rhs.0[3], carry);
+                let (t5, carry) = mac(t5, self.0[1], rhs.0[4], carry);
+                let (t6, t7) = mac(t6, self.0[1], rhs.0[5], carry);
 
-        let (t2, carry) = mac(t2, self.0[2], rhs.0[0], 0);
-        let (t3, carry) = mac(t3, self.0[2], rhs.0[1], carry);
-        let (t4, carry) = mac(t4, self.0[2], rhs.0[2], carry);
-        let (t5, carry) = mac(t5, self.0[2], rhs.0[3], carry);
-        let (t6, carry) = mac(t6, self.0[2], rhs.0[4], carry);
-        let (t7, t8) = mac(t7, self.0[2], rhs.0[5], carry);
+                let (t2, carry) = mac(t2, self.0[2], rhs.0[0], 0);
+                let (t3, carry) = mac(t3, self.0[2], rhs.0[1], carry);
+                let (t4, carry) = mac(t4, self.0[2], rhs.0[2], carry);
+                let (t5, carry) = mac(t5, self.0[2], rhs.0[3], carry);
+                let (t6, carry) = mac(t6, self.0[2], rhs.0[4], carry);
+                let (t7, t8) = mac(t7, self.0[2], rhs.0[5], carry);
 
-        let (t3, carry) = mac(t3, self.0[3], rhs.0[0], 0);
-        let (t4, carry) = mac(t4, self.0[3], rhs.0[1], carry);
-        let (t5, carry) = mac(t5, self.0[3], rhs.0[2], carry);
-        let (t6, carry) = mac(t6, self.0[3], rhs.0[3], carry);
-        let (t7, carry) = mac(t7, self.0[3], rhs.0[4], carry);
-        let (t8, t9) = mac(t8, self.0[3], rhs.0[5], carry);
+                let (t3, carry) = mac(t3, self.0[3], rhs.0[0], 0);
+                let (t4, carry) = mac(t4, self.0[3], rhs.0[1], carry);
+                let (t5, carry) = mac(t5, self.0[3], rhs.0[2], carry);
+                let (t6, carry) = mac(t6, self.0[3], rhs.0[3], carry);
+                let (t7, carry) = mac(t7, self.0[3], rhs.0[4], carry);
+                let (t8, t9) = mac(t8, self.0[3], rhs.0[5], carry);
 
-        let (t4, carry) = mac(t4, self.0[4], rhs.0[0], 0);
-        let (t5, carry) = mac(t5, self.0[4], rhs.0[1], carry);
-        let (t6, carry) = mac(t6, self.0[4], rhs.0[2], carry);
-        let (t7, carry) = mac(t7, self.0[4], rhs.0[3], carry);
-        let (t8, carry) = mac(t8, self.0[4], rhs.0[4], carry);
-        let (t9, t10) = mac(t9, self.0[4], rhs.0[5], carry);
+                let (t4, carry) = mac(t4, self.0[4], rhs.0[0], 0);
+                let (t5, carry) = mac(t5, self.0[4], rhs.0[1], carry);
+                let (t6, carry) = mac(t6, self.0[4], rhs.0[2], carry);
+                let (t7, carry) = mac(t7, self.0[4], rhs.0[3], carry);
+                let (t8, carry) = mac(t8, self.0[4], rhs.0[4], carry);
+                let (t9, t10) = mac(t9, self.0[4], rhs.0[5], carry);
 
-        let (t5, carry) = mac(t5, self.0[5], rhs.0[0], 0);
-        let (t6, carry) = mac(t6, self.0[5], rhs.0[1], carry);
-        let (t7, carry) = mac(t7, self.0[5], rhs.0[2], carry);
-        let (t8, carry) = mac(t8, self.0[5], rhs.0[3], carry);
-        let (t9, carry) = mac(t9, self.0[5], rhs.0[4], carry);
-        let (t10, t11) = mac(t10, self.0[5], rhs.0[5], carry);
+                let (t5, carry) = mac(t5, self.0[5], rhs.0[0], 0);
+                let (t6, carry) = mac(t6, self.0[5], rhs.0[1], carry);
+                let (t7, carry) = mac(t7, self.0[5], rhs.0[2], carry);
+                let (t8, carry) = mac(t8, self.0[5], rhs.0[3], carry);
+                let (t9, carry) = mac(t9, self.0[5], rhs.0[4], carry);
+                let (t10, t11) = mac(t10, self.0[5], rhs.0[5], carry);
 
-        Self::montgomery_reduce(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)
+                Self::montgomery_reduce(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)
+            }
+        }
     }
 
     /// Squares this element.

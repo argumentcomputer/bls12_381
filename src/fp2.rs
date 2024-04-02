@@ -7,7 +7,15 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp::Fp;
 
+extern "C" {
+    fn syscall_bls12381_fp2_add(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp2_sub(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp2_mul(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp2_div(p: *mut u32, q: *const u32);
+}
+
 #[derive(Copy, Clone)]
+#[repr(C)] // NOTE: this might be *technically* required for ensuring the memory layout used in the zkvm is valid?
 pub struct Fp2 {
     pub c0: Fp,
     pub c1: Fp,
@@ -179,7 +187,7 @@ impl Fp2 {
             | (self.c1.is_zero() & self.c0.lexicographically_largest())
     }
 
-    pub const fn square(&self) -> Fp2 {
+    pub fn square(&self) -> Fp2 {
         // Complex squaring:
         //
         // v0  = c0 * c1
@@ -203,35 +211,65 @@ impl Fp2 {
     }
 
     pub fn mul(&self, rhs: &Fp2) -> Fp2 {
-        // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
-        // computes the result as:
-        //
-        //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
-        //
-        // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
-        //
-        //   c_0 = a_0 b_0 - a_1 b_1
-        //   c_1 = a_0 b_1 + a_1 b_0
-        //
-        // Each of these is a "sum of products", which we can compute efficiently.
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = *self;
+                unsafe {
+                    syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
+                // computes the result as:
+                //
+                //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
+                //
+                // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
+                //
+                //   c_0 = a_0 b_0 - a_1 b_1
+                //   c_1 = a_0 b_1 + a_1 b_0
+                //
+                // Each of these is a "sum of products", which we can compute efficiently.
 
-        Fp2 {
-            c0: Fp::sum_of_products([self.c0, -self.c1], [rhs.c0, rhs.c1]),
-            c1: Fp::sum_of_products([self.c0, self.c1], [rhs.c1, rhs.c0]),
+                Fp2 {
+                    c0: Fp::sum_of_products([self.c0, -self.c1], [rhs.c0, rhs.c1]),
+                    c1: Fp::sum_of_products([self.c0, self.c1], [rhs.c1, rhs.c0]),
+                }
+            }
         }
     }
 
-    pub const fn add(&self, rhs: &Fp2) -> Fp2 {
-        Fp2 {
-            c0: (&self.c0).add(&rhs.c0),
-            c1: (&self.c1).add(&rhs.c1),
+    pub fn add(&self, rhs: &Fp2) -> Fp2 {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = *self;
+                unsafe {
+                    syscall_bls12381_fp2_add(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                Fp2 {
+                    c0: (&self.c0).add(&rhs.c0),
+                    c1: (&self.c1).add(&rhs.c1),
+                }
+            }
         }
     }
 
-    pub const fn sub(&self, rhs: &Fp2) -> Fp2 {
-        Fp2 {
-            c0: (&self.c0).sub(&rhs.c0),
-            c1: (&self.c1).sub(&rhs.c1),
+    pub fn sub(&self, rhs: &Fp2) -> Fp2 {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = *self;
+                unsafe {
+                    syscall_bls12381_fp2_sub(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                Fp2 {
+                    c0: (&self.c0).sub(&rhs.c0),
+                    c1: (&self.c1).sub(&rhs.c1),
+                }
+            }
         }
     }
 
@@ -298,24 +336,34 @@ impl Fp2 {
     /// element, returning None in the case that this element
     /// is zero.
     pub fn invert(&self) -> CtOption<Self> {
-        // We wish to find the multiplicative inverse of a nonzero
-        // element a + bu in Fp2. We leverage an identity
-        //
-        // (a + bu)(a - bu) = a^2 + b^2
-        //
-        // which holds because u^2 = -1. This can be rewritten as
-        //
-        // (a + bu)(a - bu)/(a^2 + b^2) = 1
-        //
-        // because a^2 + b^2 = 0 has no nonzero solutions for (a, b).
-        // This gives that (a - bu)/(a^2 + b^2) is the inverse
-        // of (a + bu). Importantly, this can be computing using
-        // only a single inversion in Fp.
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = Self::one();
+                unsafe {
+                    syscall_bls12381_fp2_div(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+                }
+                CtOption::new(out, !self.is_zero())
+            } else {
+                // We wish to find the multiplicative inverse of a nonzero
+                // element a + bu in Fp2. We leverage an identity
+                //
+                // (a + bu)(a - bu) = a^2 + b^2
+                //
+                // which holds because u^2 = -1. This can be rewritten as
+                //
+                // (a + bu)(a - bu)/(a^2 + b^2) = 1
+                //
+                // because a^2 + b^2 = 0 has no nonzero solutions for (a, b).
+                // This gives that (a - bu)/(a^2 + b^2) is the inverse
+                // of (a + bu). Importantly, this can be computing using
+                // only a single inversion in Fp.
 
-        (self.c0.square() + self.c1.square()).invert().map(|t| Fp2 {
-            c0: self.c0 * t,
-            c1: self.c1 * -t,
-        })
+                (self.c0.square() + self.c1.square()).invert().map(|t| Fp2 {
+                    c0: self.c0 * t,
+                    c1: self.c1 * -t,
+                })
+            }
+        }
     }
 
     /// Although this is labeled "vartime", it is only

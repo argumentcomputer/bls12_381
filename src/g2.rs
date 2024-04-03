@@ -648,7 +648,7 @@ impl_binops_multiplicative_mixed!(Scalar, G2Projective, G2Projective);
 
 #[inline(always)]
 fn mul_by_3b(x: Fp2) -> Fp2 {
-    let B3: Fp2 = Fp2::add(&Fp2::add(&B, &B), &B);
+    let B3: Fp2 = Fp2::add(&Fp2::add(&B, &B), &B); // FIXME
     x * B3
 }
 

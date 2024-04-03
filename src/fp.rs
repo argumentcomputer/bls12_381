@@ -352,27 +352,35 @@ impl Fp {
     /// element, returning None in the case that this element
     /// is zero.
     pub fn invert(&self) -> CtOption<Self> {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                let mut out = Self::one();
-                unsafe {
-                    syscall_bls12381_fp_div(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
-                }
-                CtOption::new(out, !self.is_zero())
-            } else {
-                // Exponentiate by p - 2
-                let t = self.pow_vartime(&[
-                    0xb9fe_ffff_ffff_aaa9,
-                    0x1eab_fffe_b153_ffff,
-                    0x6730_d2a0_f6b0_f624,
-                    0x6477_4b84_f385_12bf,
-                    0x4b1b_a7b6_434b_acd7,
-                    0x1a01_11ea_397f_e69a,
-                ]);
+        let res = {
+            // Exponentiate by p - 2
+            let t = self.pow_vartime(&[
+                0xb9fe_ffff_ffff_aaa9,
+                0x1eab_fffe_b153_ffff,
+                0x6730_d2a0_f6b0_f624,
+                0x6477_4b84_f385_12bf,
+                0x4b1b_a7b6_434b_acd7,
+                0x1a01_11ea_397f_e69a,
+            ]);
 
-                CtOption::new(t, !self.is_zero())
-            }
-        }
+            CtOption::new(t, !self.is_zero())
+        };
+        res
+        // cfg_if::cfg_if! {
+        //     if #[cfg(target_os = "zkvm")] {
+        //         // let mut out = Fp([1, 0, 0, 0, 0, 0]);
+        //         let mut out = Fp::one();
+        //         unsafe {
+        //             syscall_bls12381_fp_div(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+        //         }
+        //         println!("out: {:?}", out);
+        //         println!("res: {:?}", res);
+        //         println!("out_r: {:?}", out.reduce_internal());
+        //         CtOption::new(out, !self.is_zero())
+        //     } else {
+        //         res
+        //     }
+        // }
     }
 
     #[inline]
@@ -400,7 +408,7 @@ impl Fp {
     pub fn add(&self, rhs: &Fp) -> Fp {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut out = *self;
+                let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp_add(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
@@ -449,7 +457,7 @@ impl Fp {
     pub fn sub(&self, rhs: &Fp) -> Fp {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut out = *self;
+                let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
@@ -603,11 +611,11 @@ impl Fp {
     pub fn mul(&self, rhs: &Fp) -> Fp {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut out = *self;
+                let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
-                out
+                out.reduce_internal()
             } else {
                 let (t0, carry) = mac(0, self.0[0], rhs.0[0], 0);
                 let (t1, carry) = mac(0, self.0[0], rhs.0[1], carry);
@@ -656,55 +664,74 @@ impl Fp {
         }
     }
 
+    pub(crate) fn reduce_internal(&self) -> Fp {
+        // Turn into canonical form by computing
+        // (a.R) / R = a
+        Fp::montgomery_reduce(
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], 0, 0, 0, 0, 0, 0,
+        )
+    }
+
+
     /// Squares this element.
     #[inline]
-    pub const fn square(&self) -> Self {
-        let (t1, carry) = mac(0, self.0[0], self.0[1], 0);
-        let (t2, carry) = mac(0, self.0[0], self.0[2], carry);
-        let (t3, carry) = mac(0, self.0[0], self.0[3], carry);
-        let (t4, carry) = mac(0, self.0[0], self.0[4], carry);
-        let (t5, t6) = mac(0, self.0[0], self.0[5], carry);
+    pub fn square(&self) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                unsafe {
+                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                }
+                out.reduce_internal()
+            } else {
+                let (t1, carry) = mac(0, self.0[0], self.0[1], 0);
+                let (t2, carry) = mac(0, self.0[0], self.0[2], carry);
+                let (t3, carry) = mac(0, self.0[0], self.0[3], carry);
+                let (t4, carry) = mac(0, self.0[0], self.0[4], carry);
+                let (t5, t6) = mac(0, self.0[0], self.0[5], carry);
 
-        let (t3, carry) = mac(t3, self.0[1], self.0[2], 0);
-        let (t4, carry) = mac(t4, self.0[1], self.0[3], carry);
-        let (t5, carry) = mac(t5, self.0[1], self.0[4], carry);
-        let (t6, t7) = mac(t6, self.0[1], self.0[5], carry);
+                let (t3, carry) = mac(t3, self.0[1], self.0[2], 0);
+                let (t4, carry) = mac(t4, self.0[1], self.0[3], carry);
+                let (t5, carry) = mac(t5, self.0[1], self.0[4], carry);
+                let (t6, t7) = mac(t6, self.0[1], self.0[5], carry);
 
-        let (t5, carry) = mac(t5, self.0[2], self.0[3], 0);
-        let (t6, carry) = mac(t6, self.0[2], self.0[4], carry);
-        let (t7, t8) = mac(t7, self.0[2], self.0[5], carry);
+                let (t5, carry) = mac(t5, self.0[2], self.0[3], 0);
+                let (t6, carry) = mac(t6, self.0[2], self.0[4], carry);
+                let (t7, t8) = mac(t7, self.0[2], self.0[5], carry);
 
-        let (t7, carry) = mac(t7, self.0[3], self.0[4], 0);
-        let (t8, t9) = mac(t8, self.0[3], self.0[5], carry);
+                let (t7, carry) = mac(t7, self.0[3], self.0[4], 0);
+                let (t8, t9) = mac(t8, self.0[3], self.0[5], carry);
 
-        let (t9, t10) = mac(t9, self.0[4], self.0[5], 0);
+                let (t9, t10) = mac(t9, self.0[4], self.0[5], 0);
 
-        let t11 = t10 >> 63;
-        let t10 = (t10 << 1) | (t9 >> 63);
-        let t9 = (t9 << 1) | (t8 >> 63);
-        let t8 = (t8 << 1) | (t7 >> 63);
-        let t7 = (t7 << 1) | (t6 >> 63);
-        let t6 = (t6 << 1) | (t5 >> 63);
-        let t5 = (t5 << 1) | (t4 >> 63);
-        let t4 = (t4 << 1) | (t3 >> 63);
-        let t3 = (t3 << 1) | (t2 >> 63);
-        let t2 = (t2 << 1) | (t1 >> 63);
-        let t1 = t1 << 1;
+                let t11 = t10 >> 63;
+                let t10 = (t10 << 1) | (t9 >> 63);
+                let t9 = (t9 << 1) | (t8 >> 63);
+                let t8 = (t8 << 1) | (t7 >> 63);
+                let t7 = (t7 << 1) | (t6 >> 63);
+                let t6 = (t6 << 1) | (t5 >> 63);
+                let t5 = (t5 << 1) | (t4 >> 63);
+                let t4 = (t4 << 1) | (t3 >> 63);
+                let t3 = (t3 << 1) | (t2 >> 63);
+                let t2 = (t2 << 1) | (t1 >> 63);
+                let t1 = t1 << 1;
 
-        let (t0, carry) = mac(0, self.0[0], self.0[0], 0);
-        let (t1, carry) = adc(t1, 0, carry);
-        let (t2, carry) = mac(t2, self.0[1], self.0[1], carry);
-        let (t3, carry) = adc(t3, 0, carry);
-        let (t4, carry) = mac(t4, self.0[2], self.0[2], carry);
-        let (t5, carry) = adc(t5, 0, carry);
-        let (t6, carry) = mac(t6, self.0[3], self.0[3], carry);
-        let (t7, carry) = adc(t7, 0, carry);
-        let (t8, carry) = mac(t8, self.0[4], self.0[4], carry);
-        let (t9, carry) = adc(t9, 0, carry);
-        let (t10, carry) = mac(t10, self.0[5], self.0[5], carry);
-        let (t11, _) = adc(t11, 0, carry);
+                let (t0, carry) = mac(0, self.0[0], self.0[0], 0);
+                let (t1, carry) = adc(t1, 0, carry);
+                let (t2, carry) = mac(t2, self.0[1], self.0[1], carry);
+                let (t3, carry) = adc(t3, 0, carry);
+                let (t4, carry) = mac(t4, self.0[2], self.0[2], carry);
+                let (t5, carry) = adc(t5, 0, carry);
+                let (t6, carry) = mac(t6, self.0[3], self.0[3], carry);
+                let (t7, carry) = adc(t7, 0, carry);
+                let (t8, carry) = mac(t8, self.0[4], self.0[4], carry);
+                let (t9, carry) = adc(t9, 0, carry);
+                let (t10, carry) = mac(t10, self.0[5], self.0[5], carry);
+                let (t11, _) = adc(t11, 0, carry);
 
-        Self::montgomery_reduce(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)
+                Self::montgomery_reduce(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)
+            }
+        }
     }
 }
 

@@ -188,53 +188,74 @@ impl Fp2 {
     }
 
     pub fn square(&self) -> Fp2 {
-        // Complex squaring:
-        //
-        // v0  = c0 * c1
-        // c0' = (c0 + c1) * (c0 + \beta*c1) - v0 - \beta * v0
-        // c1' = 2 * v0
-        //
-        // In BLS12-381's F_{p^2}, our \beta is -1 so we
-        // can modify this formula:
-        //
-        // c0' = (c0 + c1) * (c0 - c1)
-        // c1' = 2 * c0 * c1
+        self.mul(&self)
+        // cfg_if::cfg_if! {
+        //     if #[cfg(target_os = "zkvm")] {
+        //         let mut out = self.clone();
+        //         unsafe {
+        //             syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+        //         }
+        //         Fp2 {
+        //             c0: out.c0.reduce_internal(),
+        //             c1: out.c1.reduce_internal(),
+        //         }
+        //     } else {
+        //         // Complex squaring:
+        //         //
+        //         // v0  = c0 * c1
+        //         // c0' = (c0 + c1) * (c0 + \beta*c1) - v0 - \beta * v0
+        //         // c1' = 2 * v0
+        //         //
+        //         // In BLS12-381's F_{p^2}, our \beta is -1 so we
+        //         // can modify this formula:
+        //         //
+        //         // c0' = (c0 + c1) * (c0 - c1)
+        //         // c1' = 2 * c0 * c1
 
-        let a = (&self.c0).add(&self.c1);
-        let b = (&self.c0).sub(&self.c1);
-        let c = (&self.c0).add(&self.c0);
+        //         let a = (&self.c0).add(&self.c1);
+        //         let b = (&self.c0).sub(&self.c1);
+        //         let c = (&self.c0).add(&self.c0);
 
-        Fp2 {
-            c0: (&a).mul(&b),
-            c1: (&c).mul(&self.c1),
-        }
+        //         Fp2 {
+        //             c0: (&a).mul(&b),
+        //             c1: (&c).mul(&self.c1),
+        //         }
+        //     }
+        // }
     }
 
     pub fn mul(&self, rhs: &Fp2) -> Fp2 {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut out = *self;
+                let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
                 }
-                out
+                let new_out = Fp2 {
+                    c0: out.c0.reduce_internal(),
+                    c1: out.c1.reduce_internal(),
+                };
+                new_out
             } else {
-                // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
-                // computes the result as:
-                //
-                //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
-                //
-                // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
-                //
-                //   c_0 = a_0 b_0 - a_1 b_1
-                //   c_1 = a_0 b_1 + a_1 b_0
-                //
-                // Each of these is a "sum of products", which we can compute efficiently.
+                let res = {
+                    // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
+                    // computes the result as:
+                    //
+                    //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
+                    //
+                    // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
+                    //
+                    //   c_0 = a_0 b_0 - a_1 b_1
+                    //   c_1 = a_0 b_1 + a_1 b_0
+                    //
+                    // Each of these is a "sum of products", which we can compute efficiently.
 
-                Fp2 {
-                    c0: Fp::sum_of_products([self.c0, -self.c1], [rhs.c0, rhs.c1]),
-                    c1: Fp::sum_of_products([self.c0, self.c1], [rhs.c1, rhs.c0]),
-                }
+                    Fp2 {
+                        c0: Fp::sum_of_products([self.c0, -self.c1], [rhs.c0, rhs.c1]),
+                        c1: Fp::sum_of_products([self.c0, self.c1], [rhs.c1, rhs.c0]),
+                    }
+                };
+                res
             }
         }
     }
@@ -242,7 +263,7 @@ impl Fp2 {
     pub fn add(&self, rhs: &Fp2) -> Fp2 {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut out = *self;
+                let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp2_add(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
                 }
@@ -259,7 +280,7 @@ impl Fp2 {
     pub fn sub(&self, rhs: &Fp2) -> Fp2 {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut out = *self;
+                let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp2_sub(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
                 }
@@ -336,14 +357,14 @@ impl Fp2 {
     /// element, returning None in the case that this element
     /// is zero.
     pub fn invert(&self) -> CtOption<Self> {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                let mut out = Self::one();
-                unsafe {
-                    syscall_bls12381_fp2_div(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
-                }
-                CtOption::new(out, !self.is_zero())
-            } else {
+        // cfg_if::cfg_if! {
+        //     if #[cfg(target_os = "zkvm")] {
+        //         let mut out = Self::one();
+        //         unsafe {
+        //             syscall_bls12381_fp2_div(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+        //         }
+        //         CtOption::new(out, !self.is_zero())
+        //     } else {
                 // We wish to find the multiplicative inverse of a nonzero
                 // element a + bu in Fp2. We leverage an identity
                 //
@@ -362,8 +383,8 @@ impl Fp2 {
                     c0: self.c0 * t,
                     c1: self.c1 * -t,
                 })
-            }
-        }
+        //     }
+        // }
     }
 
     /// Although this is labeled "vartime", it is only

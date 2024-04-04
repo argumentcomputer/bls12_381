@@ -87,6 +87,16 @@ const MODULUS: [u64; 6] = [
 /// INV = -(p^{-1} mod 2^64) mod 2^64
 const INV: u64 = 0x89f3_fffc_fffc_fffd;
 
+/// R_INV = (2^384)^(-1) mod p
+const R_INV: Fp = Fp([
+    0xf4d38259380b4820,
+    0x7fe11274d898fafb,
+    0x343ea97914956dc8,
+    0x1797ab1458a88de9,
+    0xed5e64273c4f538b,
+    0x14fec701e8fb0ce9,
+]);
+
 /// R = 2^384 mod p
 const R: Fp = Fp([
     0x7609_0000_0002_fffd,
@@ -667,9 +677,20 @@ impl Fp {
     pub(crate) fn reduce_internal(&self) -> Fp {
         // Turn into canonical form by computing
         // (a.R) / R = a
-        Fp::montgomery_reduce(
-            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], 0, 0, 0, 0, 0, 0,
-        )
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                unsafe {
+                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, R_INV.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                let res = Fp::montgomery_reduce(
+                    self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], 0, 0, 0, 0, 0, 0,
+                );
+                res
+            }
+        }
     }
 
 

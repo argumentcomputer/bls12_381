@@ -161,6 +161,7 @@ impl Fp2 {
     }
 
     #[inline(always)]
+    #[wp1_derive::cycle_tracker]
     pub fn mul_by_nonresidue(&self) -> Fp2 {
         // Multiply a + bu by u + 1, getting
         // au + a + bu^2 + bu

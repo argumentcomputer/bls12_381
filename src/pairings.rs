@@ -63,6 +63,7 @@ impl MillerLoopResult {
         // Faster Squaring in the Cyclotomic Subgroup of Sixth Degree Extensions
         // https://eprint.iacr.org/2009/565.pdf
         #[must_use]
+        #[wp1_derive::cycle_tracker]
         fn cyclotomic_square(f: Fp12) -> Fp12 {
             let mut z0 = f.c0.c0;
             let mut z4 = f.c0.c1;
@@ -112,6 +113,7 @@ impl MillerLoopResult {
             }
         }
         #[must_use]
+        #[wp1_derive::cycle_tracker]
         fn cycolotomic_exp(f: Fp12) -> Fp12 {
             let x = BLS_X;
             let mut tmp = Fp12::one();
@@ -693,6 +695,7 @@ fn miller_loop<D: MillerLoopDriver>(driver: &mut D) -> D::Output {
     f
 }
 
+#[wp1_derive::cycle_tracker]
 fn ell(f: Fp12, coeffs: &(Fp2, Fp2, Fp2), p: &G1Affine) -> Fp12 {
     let mut c0 = coeffs.0;
     let mut c1 = coeffs.1;

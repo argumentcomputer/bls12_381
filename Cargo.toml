@@ -35,6 +35,8 @@ required-features = ["experimental"]
 
 [dependencies]
 cfg-if = "1.0.0"
+wp1-derive = { git = "ssh://git@github.com/wormhole-foundation/wp1", branch = "dev", package = "wp1-derive" }
+wp1_zkvm =  { git = "ssh://git@github.com/wormhole-foundation/wp1", branch = "dev", package = "wp1-zkvm" }
 
 [dependencies.digest]
 version = "0.9"

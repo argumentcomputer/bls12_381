@@ -110,6 +110,7 @@ impl Fp6 {
         }
     }
 
+    #[wp1_derive::cycle_tracker]
     pub fn mul_by_1(&self, c1: &Fp2) -> Fp6 {
         Fp6 {
             c0: (self.c2 * c1).mul_by_nonresidue(),
@@ -118,6 +119,7 @@ impl Fp6 {
         }
     }
 
+    #[wp1_derive::cycle_tracker]
     pub fn mul_by_01(&self, c0: &Fp2, c1: &Fp2) -> Fp6 {
         let a_a = self.c0 * c0;
         let b_b = self.c1 * c1;

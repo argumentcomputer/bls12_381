@@ -113,6 +113,7 @@ impl Fp12 {
         }
     }
 
+    #[wp1_derive::cycle_tracker]
     pub fn mul_by_014(&self, c0: &Fp2, c1: &Fp2, c4: &Fp2) -> Fp12 {
         let aa = self.c0.mul_by_01(c0, c1);
         let bb = self.c1.mul_by_1(c4);
@@ -133,6 +134,7 @@ impl Fp12 {
     }
 
     #[inline(always)]
+    #[wp1_derive::cycle_tracker]
     pub fn conjugate(&self) -> Self {
         Fp12 {
             c0: self.c0,
@@ -142,6 +144,7 @@ impl Fp12 {
 
     /// Raises this element to p.
     #[inline(always)]
+    #[wp1_derive::cycle_tracker]
     pub fn frobenius_map(&self) -> Self {
         let c0 = self.c0.frobenius_map();
         let c1 = self.c1.frobenius_map();
@@ -171,6 +174,7 @@ impl Fp12 {
     }
 
     #[inline]
+    #[wp1_derive::cycle_tracker]
     pub fn square(&self) -> Self {
         let ab = self.c0 * self.c1;
         let c0c1 = self.c0 + self.c1;

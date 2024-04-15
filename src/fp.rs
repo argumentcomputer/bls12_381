@@ -12,7 +12,6 @@ extern "C" {
     fn syscall_bls12381_fp_add(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp_sub(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp_mul(p: *mut u32, q: *const u32);
-    fn syscall_bls12381_fp_div(p: *mut u32, q: *const u32);
 }
 
 // The internal representation of this type is six 64-bit unsigned
@@ -362,35 +361,17 @@ impl Fp {
     /// element, returning None in the case that this element
     /// is zero.
     pub fn invert(&self) -> CtOption<Self> {
-        let res = {
-            // Exponentiate by p - 2
-            let t = self.pow_vartime(&[
-                0xb9fe_ffff_ffff_aaa9,
-                0x1eab_fffe_b153_ffff,
-                0x6730_d2a0_f6b0_f624,
-                0x6477_4b84_f385_12bf,
-                0x4b1b_a7b6_434b_acd7,
-                0x1a01_11ea_397f_e69a,
-            ]);
+        // Exponentiate by p - 2
+        let t = self.pow_vartime(&[
+            0xb9fe_ffff_ffff_aaa9,
+            0x1eab_fffe_b153_ffff,
+            0x6730_d2a0_f6b0_f624,
+            0x6477_4b84_f385_12bf,
+            0x4b1b_a7b6_434b_acd7,
+            0x1a01_11ea_397f_e69a,
+        ]);
 
-            CtOption::new(t, !self.is_zero())
-        };
-        res
-        // cfg_if::cfg_if! {
-        //     if #[cfg(target_os = "zkvm")] {
-        //         // let mut out = Fp([1, 0, 0, 0, 0, 0]);
-        //         let mut out = Fp::one();
-        //         unsafe {
-        //             syscall_bls12381_fp_div(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
-        //         }
-        //         println!("out: {:?}", out);
-        //         println!("res: {:?}", res);
-        //         println!("out_r: {:?}", out.reduce_internal());
-        //         CtOption::new(out, !self.is_zero())
-        //     } else {
-        //         res
-        //     }
-        // }
+        CtOption::new(t, !self.is_zero())
     }
 
     #[inline]

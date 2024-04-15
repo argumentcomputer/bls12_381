@@ -11,7 +11,6 @@ extern "C" {
     fn syscall_bls12381_fp2_add(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp2_sub(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp2_mul(p: *mut u32, q: *const u32);
-    fn syscall_bls12381_fp2_div(p: *mut u32, q: *const u32);
 }
 
 #[derive(Copy, Clone)]
@@ -357,34 +356,24 @@ impl Fp2 {
     /// element, returning None in the case that this element
     /// is zero.
     pub fn invert(&self) -> CtOption<Self> {
-        // cfg_if::cfg_if! {
-        //     if #[cfg(target_os = "zkvm")] {
-        //         let mut out = Self::one();
-        //         unsafe {
-        //             syscall_bls12381_fp2_div(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
-        //         }
-        //         CtOption::new(out, !self.is_zero())
-        //     } else {
-                // We wish to find the multiplicative inverse of a nonzero
-                // element a + bu in Fp2. We leverage an identity
-                //
-                // (a + bu)(a - bu) = a^2 + b^2
-                //
-                // which holds because u^2 = -1. This can be rewritten as
-                //
-                // (a + bu)(a - bu)/(a^2 + b^2) = 1
-                //
-                // because a^2 + b^2 = 0 has no nonzero solutions for (a, b).
-                // This gives that (a - bu)/(a^2 + b^2) is the inverse
-                // of (a + bu). Importantly, this can be computing using
-                // only a single inversion in Fp.
+        // We wish to find the multiplicative inverse of a nonzero
+        // element a + bu in Fp2. We leverage an identity
+        //
+        // (a + bu)(a - bu) = a^2 + b^2
+        //
+        // which holds because u^2 = -1. This can be rewritten as
+        //
+        // (a + bu)(a - bu)/(a^2 + b^2) = 1
+        //
+        // because a^2 + b^2 = 0 has no nonzero solutions for (a, b).
+        // This gives that (a - bu)/(a^2 + b^2) is the inverse
+        // of (a + bu). Importantly, this can be computing using
+        // only a single inversion in Fp.
 
-                (self.c0.square() + self.c1.square()).invert().map(|t| Fp2 {
-                    c0: self.c0 * t,
-                    c1: self.c1 * -t,
-                })
-        //     }
-        // }
+        (self.c0.square() + self.c1.square()).invert().map(|t| Fp2 {
+            c0: self.c0 * t,
+            c1: self.c1 * -t,
+        })
     }
 
     /// Although this is labeled "vartime", it is only

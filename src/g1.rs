@@ -324,10 +324,23 @@ impl G1Affine {
     /// Attempts to deserialize a compressed element. See [`notes::serialization`](crate::notes::serialization)
     /// for details about how group elements are serialized.
     pub fn from_compressed(bytes: &[u8; 48]) -> CtOption<Self> {
-        // We already know the point is on the curve because this is established
-        // by the y-coordinate recovery procedure in from_compressed_unchecked().
+        cfg_if::cfg_if! {
+            if #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))] {
+                let mut decompressed_g1 = [0u8; 96];
+                decompressed_g1[..48].copy_from_slice(bytes);
+                let is_odd = (decompressed_g1[0] & 0b_0010_0000) >> 5 == 0;
+                decompressed_g1[0] &= 0b_0001_1111;
+                unsafe {
+                    syscall_bls12381_decompress(&mut decompressed_g1, is_odd);
+                }
+                Self::from_uncompressed_unchecked(decompressed_g1).and_then(|p| CtOption::new(p, p.is_torsion_free()))
+            } else {
+                // We already know the point is on the curve because this is established
+                // by the y-coordinate recovery procedure in from_compressed_unchecked().
 
-        Self::from_compressed_unchecked(bytes).and_then(|p| CtOption::new(p, p.is_torsion_free()))
+                Self::from_compressed_unchecked(bytes).and_then(|p| CtOption::new(p, p.is_torsion_free()))
+            }
+        }
     }
 
     /// Attempts to deserialize an uncompressed element, not checking if the

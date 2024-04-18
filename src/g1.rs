@@ -17,6 +17,10 @@ use group::WnafGroup;
 use crate::fp::Fp;
 use crate::Scalar;
 
+extern "C" {
+    fn syscall_bls12381_decompress(p: &mut [u8; 96], is_odd: bool);
+}
+
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
 /// improve performance through the use of mixed curve model arithmetic.
@@ -333,7 +337,7 @@ impl G1Affine {
                 unsafe {
                     syscall_bls12381_decompress(&mut decompressed_g1, is_odd);
                 }
-                Self::from_uncompressed_unchecked(decompressed_g1).and_then(|p| CtOption::new(p, p.is_torsion_free()))
+                Self::from_uncompressed_unchecked(&decompressed_g1).and_then(|p| CtOption::new(p, p.is_torsion_free()))
             } else {
                 // We already know the point is on the curve because this is established
                 // by the y-coordinate recovery procedure in from_compressed_unchecked().

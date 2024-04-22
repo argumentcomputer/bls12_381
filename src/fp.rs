@@ -97,7 +97,7 @@ const R_INV: Fp = Fp([
 ]);
 
 /// R = 2^384 mod p
-const R: Fp = Fp([
+pub(crate) const R: Fp = Fp([
     0x7609_0000_0002_fffd,
     0xebf4_000b_c40c_0002,
     0x5f48_9857_53c7_58ba,
@@ -194,6 +194,7 @@ impl Fp {
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into an `Fp`, failing if the input is not canonical.
     pub fn from_bytes(bytes: &[u8; 48]) -> CtOption<Fp> {
+        println!("cycle-tracker-start: Fp_from_bytes");
         let mut tmp = Fp([0, 0, 0, 0, 0, 0]);
 
         tmp.0[5] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
@@ -220,7 +221,9 @@ impl Fp {
         // (a.R^0 * R^2) / R = a.R
         tmp *= &R2;
 
-        CtOption::new(tmp, Choice::from(is_some))
+        let res = CtOption::new(tmp, Choice::from(is_some));
+        println!("cycle-tracker-end: Fp_from_bytes");
+        res
     }
 
     /// Converts an element of `Fp` into a byte representation in

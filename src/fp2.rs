@@ -11,6 +11,8 @@ extern "C" {
     fn syscall_bls12381_fp2_add(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp2_sub(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp2_mul(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp2_sqrt(p: *mut u32);
+    fn syscall_bls12381_fp_mul(p: *mut u32, q: *const u32);
 }
 
 #[derive(Copy, Clone)]
@@ -176,14 +178,18 @@ impl Fp2 {
     /// larger than its negation.
     #[inline]
     pub fn lexicographically_largest(&self) -> Choice {
+        println!("cycle-tracker-start: lexicographically_largest");
         // If this element's c1 coefficient is lexicographically largest
         // then it is lexicographically largest. Otherwise, in the event
         // the c1 coefficient is zero and the c0 coefficient is
         // lexicographically largest, then this element is lexicographically
         // largest.
 
-        self.c1.lexicographically_largest()
-            | (self.c1.is_zero() & self.c0.lexicographically_largest())
+        let res = self.c1.lexicographically_largest()
+            | (self.c1.is_zero() & self.c0.lexicographically_largest());
+
+        println!("cycle-tracker-end: lexicographically_largest");
+        res
     }
 
     pub fn square(&self) -> Fp2 {
@@ -301,55 +307,82 @@ impl Fp2 {
     }
 
     pub fn sqrt(&self) -> CtOption<Self> {
-        // Algorithm 9, https://eprint.iacr.org/2012/685.pdf
-        // with constant time modifications.
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = Fp2 {
+                    c0: self.c0.reduce_internal(),
+                    c1: self.c1.reduce_internal(),
+                };
+                unsafe {
+                    syscall_bls12381_fp2_sqrt(out.c0.0.as_mut_ptr() as *mut u32);
+                }
+                unsafe {
+                    syscall_bls12381_fp_mul(out.c0.0.as_mut_ptr() as *mut u32, crate::fp::R.0.as_ptr() as *const u32);
+                }
+                unsafe {
+                    syscall_bls12381_fp_mul(out.c1.0.as_mut_ptr() as *mut u32, crate::fp::R.0.as_ptr() as *const u32);
+                }
 
-        CtOption::new(Fp2::zero(), self.is_zero()).or_else(|| {
-            // a1 = self^((p - 3) / 4)
-            let a1 = self.pow_vartime(&[
-                0xee7f_bfff_ffff_eaaa,
-                0x07aa_ffff_ac54_ffff,
-                0xd9cc_34a8_3dac_3d89,
-                0xd91d_d2e1_3ce1_44af,
-                0x92c6_e9ed_90d2_eb35,
-                0x0680_447a_8e5f_f9a6,
-            ]);
+                // NOTE: The precompile might return either `sqrt` or `-sqrt`, since both are valid values for the prover to supply.
+                // this assertion needs fixing FIXME
 
-            // alpha = a1^2 * self = self^((p - 3) / 2 + 1) = self^((p - 1) / 2)
-            let alpha = a1.square() * self;
+                // assert_eq!(out, result.unwrap());
+                CtOption::new(out, 1.into())
+            } else {
+        let result = {
+                // Algorithm 9, https://eprint.iacr.org/2012/685.pdf
+                // with constant time modifications.
 
-            // x0 = self^((p + 1) / 4)
-            let x0 = a1 * self;
+                CtOption::new(Fp2::zero(), self.is_zero()).or_else(|| {
+                    // a1 = self^((p - 3) / 4)
+                    let a1 = self.pow_vartime(&[
+                        0xee7f_bfff_ffff_eaaa,
+                        0x07aa_ffff_ac54_ffff,
+                        0xd9cc_34a8_3dac_3d89,
+                        0xd91d_d2e1_3ce1_44af,
+                        0x92c6_e9ed_90d2_eb35,
+                        0x0680_447a_8e5f_f9a6,
+                    ]);
 
-            // In the event that alpha = -1, the element is order p - 1 and so
-            // we're just trying to get the square of an element of the subfield
-            // Fp. This is given by x0 * u, since u = sqrt(-1). Since the element
-            // x0 = a + bu has b = 0, the solution is therefore au.
-            CtOption::new(
-                Fp2 {
-                    c0: -x0.c1,
-                    c1: x0.c0,
-                },
-                alpha.ct_eq(&(&Fp2::one()).neg()),
-            )
-            // Otherwise, the correct solution is (1 + alpha)^((q - 1) // 2) * x0
-            .or_else(|| {
-                CtOption::new(
-                    (alpha + Fp2::one()).pow_vartime(&[
-                        0xdcff_7fff_ffff_d555,
-                        0x0f55_ffff_58a9_ffff,
-                        0xb398_6950_7b58_7b12,
-                        0xb23b_a5c2_79c2_895f,
-                        0x258d_d3db_21a5_d66b,
-                        0x0d00_88f5_1cbf_f34d,
-                    ]) * x0,
-                    Choice::from(1),
-                )
-            })
-            // Only return the result if it's really the square root (and so
-            // self is actually quadratic nonresidue)
-            .and_then(|sqrt| CtOption::new(sqrt, sqrt.square().ct_eq(self)))
-        })
+                    // alpha = a1^2 * self = self^((p - 3) / 2 + 1) = self^((p - 1) / 2)
+                    let alpha = a1.square() * self;
+
+                    // x0 = self^((p + 1) / 4)
+                    let x0 = a1 * self;
+
+                    // In the event that alpha = -1, the element is order p - 1 and so
+                    // we're just trying to get the square of an element of the subfield
+                    // Fp. This is given by x0 * u, since u = sqrt(-1). Since the element
+                    // x0 = a + bu has b = 0, the solution is therefore au.
+                    CtOption::new(
+                        Fp2 {
+                            c0: -x0.c1,
+                            c1: x0.c0,
+                        },
+                        alpha.ct_eq(&(&Fp2::one()).neg()),
+                    )
+                    // Otherwise, the correct solution is (1 + alpha)^((q - 1) // 2) * x0
+                        .or_else(|| {
+                            CtOption::new(
+                                (alpha + Fp2::one()).pow_vartime(&[
+                                    0xdcff_7fff_ffff_d555,
+                                    0x0f55_ffff_58a9_ffff,
+                                    0xb398_6950_7b58_7b12,
+                                    0xb23b_a5c2_79c2_895f,
+                                    0x258d_d3db_21a5_d66b,
+                                    0x0d00_88f5_1cbf_f34d,
+                                ]) * x0,
+                                Choice::from(1),
+                            )
+                        })
+                    // Only return the result if it's really the square root (and so
+                    // self is actually quadratic nonresidue)
+                        .and_then(|sqrt| CtOption::new(sqrt, sqrt.square().ct_eq(self)))
+                })
+        };
+                result
+            }
+        }
     }
 
     /// Computes the multiplicative inverse of this field

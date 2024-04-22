@@ -174,7 +174,7 @@ where
 impl_binops_additive!(G2Projective, G2Affine);
 impl_binops_additive_specify_output!(G2Affine, G2Projective, G2Projective);
 
-const B: Fp2 = Fp2 {
+pub const B: Fp2 = Fp2 {
     c0: Fp::from_raw_unchecked([
         0xaa27_0000_000c_fff3,
         0x53cc_0032_fc34_000a,
@@ -399,12 +399,14 @@ impl G2Affine {
     /// **This is dangerous to call unless you trust the bytes you are reading; otherwise,
     /// API invariants may be broken.** Please consider using `from_compressed()` instead.
     pub fn from_compressed_unchecked(bytes: &[u8; 96]) -> CtOption<Self> {
+        println!("cycle-tracker-start: from_compressed_unchecked");
         // Obtain the three flags from the start of the byte sequence
         let compression_flag_set = Choice::from((bytes[0] >> 7) & 1);
         let infinity_flag_set = Choice::from((bytes[0] >> 6) & 1);
         let sort_flag_set = Choice::from((bytes[0] >> 5) & 1);
 
         // Attempt to obtain the x-coordinate
+        println!("cycle-tracker-start: recovering xc0 and xc1");
         let xc1 = {
             let mut tmp = [0; 48];
             tmp.copy_from_slice(&bytes[0..48]);
@@ -420,8 +422,9 @@ impl G2Affine {
 
             Fp::from_bytes(&tmp)
         };
+        println!("cycle-tracker-end: recovering xc0 and xc1");
 
-        xc1.and_then(|xc1| {
+        let res = xc1.and_then(|xc1| {
             xc0.and_then(|xc0| {
                 let x = Fp2 { c0: xc0, c1: xc1 };
 
@@ -460,7 +463,9 @@ impl G2Affine {
                     })
                 })
             })
-        })
+        });
+        println!("cycle-tracker-end: from_compressed_unchecked");
+        res
     }
 
     /// Returns true if this element is the identity (the point at infinity).
@@ -473,12 +478,18 @@ impl G2Affine {
     /// exists within the $q$-order subgroup $\mathbb{G}_2$. This should always return true
     /// unless an "unchecked" API was used.
     pub fn is_torsion_free(&self) -> Choice {
+        println!("cycle-tracker-start: is_torsion_free");
         // Algorithm from Section 4 of https://eprint.iacr.org/2021/1130
         // Updated proof of correctness in https://eprint.iacr.org/2022/352
         //
         // Check that psi(P) == [x] P
         let p = G2Projective::from(self);
-        p.psi().ct_eq(&p.mul_by_x())
+        println!("cycle-tracker-start: mul_by_x");
+        let tmp = p.mul_by_x();
+        println!("cycle-tracker-end: mul_by_x");
+        let res = p.psi().ct_eq(&tmp);
+        println!("cycle-tracker-end: is_torsion_free");
+        res
     }
 
     /// Returns true if this point is on the curve. This should always return

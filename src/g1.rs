@@ -399,14 +399,19 @@ impl G1Affine {
     /// exists within the $q$-order subgroup $\mathbb{G}_1$. This should always return true
     /// unless an "unchecked" API was used.
     pub fn is_torsion_free(&self) -> Choice {
+        println!("cycle-tracker-start: G1_is_torsion_free");
         // Algorithm from Section 6 of https://eprint.iacr.org/2021/1130
         // Updated proof of correctness in https://eprint.iacr.org/2022/352
         //
         // Check that endomorphism_p(P) == -[x^2] P
 
+        println!("cycle-tracker-start: mul by -[x^2]");
         let minus_x_squared_times_p = G1Projective::from(self).mul_by_x().mul_by_x().neg();
+        println!("cycle-tracker-end: mul by -[x^2]");
         let endomorphism_p = endomorphism(self);
-        minus_x_squared_times_p.ct_eq(&G1Projective::from(endomorphism_p))
+        let res = minus_x_squared_times_p.ct_eq(&G1Projective::from(endomorphism_p));
+        println!("cycle-tracker-end: G1_is_torsion_free");
+        res
     }
 
     /// Returns true if this point is on the curve. This should always return

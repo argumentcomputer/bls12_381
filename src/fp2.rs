@@ -8,6 +8,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 use crate::fp::Fp;
 
 extern "C" {
+    #![allow(dead_code)]
     fn syscall_bls12381_fp2_add(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp2_sub(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp2_mul(p: *mut u32, q: *const u32);

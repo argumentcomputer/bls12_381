@@ -18,7 +18,8 @@ use crate::fp::Fp;
 use crate::Scalar;
 
 extern "C" {
-    fn syscall_bls12381_g1_decompress(p: &mut [u8; 96]);
+    #![allow(dead_code)]
+    fn syscall_bls12381_decompress(p: &mut [u8; 96], is_odd: bool);
 }
 
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.

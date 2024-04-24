@@ -333,7 +333,7 @@ impl G1Affine {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    syscall_bls12381_g1_decompress(&mut decompressed_g1, is_odd);
+                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1).and_then(|p| CtOption::new(p, p.is_torsion_free()))
             } else {
@@ -355,7 +355,7 @@ impl G1Affine {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    syscall_bls12381_g1_decompress(&mut decompressed_g1, is_odd);
+                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1)
             } else {

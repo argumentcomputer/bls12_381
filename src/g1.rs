@@ -17,6 +17,7 @@ use group::WnafGroup;
 use crate::fp::Fp;
 use crate::Scalar;
 
+#[cfg(target_os = "zkvm")]
 extern "C" {
     fn syscall_bls12381_g1_decompress(p: &mut [u8; 96]);
 }

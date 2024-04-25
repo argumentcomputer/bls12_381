@@ -8,6 +8,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::util::{adc, mac, sbb};
 
+#[cfg(target_os = "zkvm")]
 extern "C" {
     fn syscall_bls12381_fp_add(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp_sub(p: *mut u32, q: *const u32);
@@ -87,6 +88,7 @@ const MODULUS: [u64; 6] = [
 const INV: u64 = 0x89f3_fffc_fffc_fffd;
 
 /// R_INV = (2^384)^(-1) mod p
+#[cfg(target_os = "zkvm")]
 const R_INV: Fp = Fp([
     0xf4d38259380b4820,
     0x7fe11274d898fafb,
@@ -655,6 +657,7 @@ impl Fp {
         }
     }
 
+    #[cfg(target_os = "zkvm")]
     pub(crate) fn reduce_internal(&self) -> Fp {
         // Turn into canonical form by computing
         // (a.R) / R = a
@@ -673,7 +676,6 @@ impl Fp {
             }
         }
     }
-
 
     /// Squares this element.
     #[inline]

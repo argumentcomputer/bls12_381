@@ -7,6 +7,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp::Fp;
 
+#[cfg(target_os = "zkvm")]
 extern "C" {
     fn syscall_bls12381_fp2_add(p: *mut u32, q: *const u32);
     fn syscall_bls12381_fp2_sub(p: *mut u32, q: *const u32);
@@ -236,25 +237,22 @@ impl Fp2 {
                 };
                 new_out
             } else {
-                let res = {
-                    // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
-                    // computes the result as:
-                    //
-                    //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
-                    //
-                    // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
-                    //
-                    //   c_0 = a_0 b_0 - a_1 b_1
-                    //   c_1 = a_0 b_1 + a_1 b_0
-                    //
-                    // Each of these is a "sum of products", which we can compute efficiently.
+                // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
+                // computes the result as:
+                //
+                //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
+                //
+                // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
+                //
+                //   c_0 = a_0 b_0 - a_1 b_1
+                //   c_1 = a_0 b_1 + a_1 b_0
+                //
+                // Each of these is a "sum of products", which we can compute efficiently.
 
-                    Fp2 {
-                        c0: Fp::sum_of_products([self.c0, -self.c1], [rhs.c0, rhs.c1]),
-                        c1: Fp::sum_of_products([self.c0, self.c1], [rhs.c1, rhs.c0]),
-                    }
-                };
-                res
+                Fp2 {
+                    c0: Fp::sum_of_products([self.c0, -self.c1], [rhs.c0, rhs.c1]),
+                    c1: Fp::sum_of_products([self.c0, self.c1], [rhs.c1, rhs.c0]),
+                }
             }
         }
     }

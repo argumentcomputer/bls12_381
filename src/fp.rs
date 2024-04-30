@@ -657,7 +657,10 @@ impl Fp {
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_inv_internal(&mut self) {
         unsafe {
-            wp1_precompiles::syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R_INV.0.as_ptr() as *const u32);
+            wp1_precompiles::syscall_bls12381_fp_mul(
+                self.0.as_mut_ptr() as *mut u32,
+                R_INV.0.as_ptr() as *const u32,
+            );
         }
     }
 
@@ -667,7 +670,10 @@ impl Fp {
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_internal(&mut self) {
         unsafe {
-            wp1_precompiles::syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R.0.as_ptr() as *const u32);
+            wp1_precompiles::syscall_bls12381_fp_mul(
+                self.0.as_mut_ptr() as *mut u32,
+                R.0.as_ptr() as *const u32,
+            );
         }
     }
 

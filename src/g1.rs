@@ -438,6 +438,46 @@ impl G1Affine {
         // y^2 - x^3 ?= 4
         (self.y.square() - (self.x.square() * self.x)).ct_eq(&B) | self.infinity
     }
+
+    /// Adds two affine points together.
+    /// In the zkvm context, this is accelerated with precompiles. In regular rust, this entails
+    /// converting one of the points to projective coordinates and then converting the output back.
+    pub fn add_affine(&self, rhs: &Self) -> Self {
+        if self.is_identity().into() {
+            return rhs.clone();
+        } else if rhs.is_identity().into() {
+            return self.clone();
+        }
+
+        cfg_if::cfg_if! {
+            if #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))] {
+                // FIXME: this fails if self == rhs, would need to use syscall_bls12381_g1_double instead
+                let mut res = Self {
+                    x: self.x.mul_r_inv_internal(),
+                    y: self.y.mul_r_inv_internal(),
+                    infinity: self.infinity,
+                };
+                let other = Self {
+                    x: rhs.x.mul_r_inv_internal(),
+                    y: rhs.y.mul_r_inv_internal(),
+                    infinity: rhs.infinity,
+                };
+                unsafe {
+                    wp1_precompiles::syscall_bls12381_g1_add(res.x.0.as_mut_ptr() as *mut u32, other.x.0.as_ptr() as *const u32);
+                }
+                let res = Self {
+                    x: res.x.mul_r_internal(),
+                    y: res.y.mul_r_internal(),
+                    infinity: res.infinity,
+                };
+                res
+            } else {
+                let proj = G1Projective::from(rhs);
+                let res = proj + self;
+                G1Affine::from(res)
+            }
+        }
+    }
 }
 
 /// A nontrivial third root of unity in Fp

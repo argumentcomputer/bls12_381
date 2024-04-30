@@ -8,13 +8,6 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::util::{adc, mac, sbb};
 
-#[cfg(target_os = "zkvm")]
-extern "C" {
-    fn syscall_bls12381_fp_add(p: *mut u32, q: *const u32);
-    fn syscall_bls12381_fp_sub(p: *mut u32, q: *const u32);
-    fn syscall_bls12381_fp_mul(p: *mut u32, q: *const u32);
-}
-
 // The internal representation of this type is six 64-bit unsigned
 // integers in little-endian order. `Fp` values are always in
 // Montgomery form; i.e., Scalar(a) = aR mod p, with R = 2^384.
@@ -403,7 +396,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_add(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    wp1_precompiles::syscall_bls12381_fp_add(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
                 out
             } else {
@@ -452,7 +445,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    wp1_precompiles::syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
                 out
             } else {
@@ -606,9 +599,9 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    wp1_precompiles::syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
-                out.reduce_internal()
+                out.mul_r_inv_internal()
             } else {
                 let (t0, carry) = mac(0, self.0[0], rhs.0[0], 0);
                 let (t1, carry) = mac(0, self.0[0], rhs.0[1], carry);
@@ -657,24 +650,26 @@ impl Fp {
         }
     }
 
+    /// Internal function to multiply the internal representation by `R_INV`, equivalent to transforming from
+    /// the internal Montgomery form to a plain BigInt form.
+    /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
     #[cfg(target_os = "zkvm")]
-    pub(crate) fn reduce_internal(&self) -> Fp {
-        // Turn into canonical form by computing
-        // (a.R) / R = a
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                let mut out = self.clone();
-                unsafe {
-                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, R_INV.0.as_ptr() as *const u32);
-                }
-                out
-            } else {
-                let res = Fp::montgomery_reduce(
-                    self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], 0, 0, 0, 0, 0, 0,
-                );
-                res
-            }
+    pub(crate) fn mul_r_inv_internal(mut self) -> Fp {
+        unsafe {
+            wp1_precompiles::syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R_INV.0.as_ptr() as *const u32);
         }
+        self
+    }
+
+    /// Internal function to multiply the internal representation by `R`, equivalent to transforming from
+    /// a plain BigInt form back to the internal Montgomery form.
+    /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[cfg(target_os = "zkvm")]
+    pub(crate) fn mul_r_internal(mut self) -> Fp {
+        unsafe {
+            wp1_precompiles::syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R.0.as_ptr() as *const u32);
+        }
+        self
     }
 
     /// Squares this element.
@@ -684,9 +679,9 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                    wp1_precompiles::syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
                 }
-                out.reduce_internal()
+                out.mul_r_inv_internal()
             } else {
                 let (t1, carry) = mac(0, self.0[0], self.0[1], 0);
                 let (t2, carry) = mac(0, self.0[0], self.0[2], carry);

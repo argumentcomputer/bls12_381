@@ -17,11 +17,6 @@ use group::WnafGroup;
 use crate::fp::Fp;
 use crate::Scalar;
 
-#[cfg(target_os = "zkvm")]
-extern "C" {
-    fn syscall_bls12381_g1_decompress(p: &mut [u8; 96]);
-}
-
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
 /// improve performance through the use of mixed curve model arithmetic.
@@ -334,7 +329,7 @@ impl G1Affine {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
+                    wp1_precompiles::syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1).and_then(|p| CtOption::new(p, p.is_torsion_free()))
             } else {
@@ -356,7 +351,7 @@ impl G1Affine {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
+                    wp1_precompiles::syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1)
             } else {

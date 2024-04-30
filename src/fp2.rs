@@ -7,13 +7,6 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp::Fp;
 
-#[cfg(target_os = "zkvm")]
-extern "C" {
-    fn syscall_bls12381_fp2_add(p: *mut u32, q: *const u32);
-    fn syscall_bls12381_fp2_sub(p: *mut u32, q: *const u32);
-    fn syscall_bls12381_fp2_mul(p: *mut u32, q: *const u32);
-}
-
 #[derive(Copy, Clone)]
 #[repr(C)] // NOTE: this might be *technically* required for ensuring the memory layout used in the zkvm is valid?
 pub struct Fp2 {
@@ -187,41 +180,48 @@ impl Fp2 {
             | (self.c1.is_zero() & self.c0.lexicographically_largest())
     }
 
+    /// Internal function to multiply the internal representation by `R_INV`, equivalent to transforming from
+    /// the internal Montgomery form to a plain BigInt form.
+    /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[cfg(target_os = "zkvm")]
+    pub(crate) fn mul_r_inv_internal(self) -> Fp2 {
+        Fp2 {
+            c0: self.c0.mul_r_inv_internal(),
+            c1: self.c1.mul_r_inv_internal(),
+        }
+    }
+
     pub fn square(&self) -> Fp2 {
-        self.mul(&self)
-        // cfg_if::cfg_if! {
-        //     if #[cfg(target_os = "zkvm")] {
-        //         let mut out = self.clone();
-        //         unsafe {
-        //             syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
-        //         }
-        //         Fp2 {
-        //             c0: out.c0.reduce_internal(),
-        //             c1: out.c1.reduce_internal(),
-        //         }
-        //     } else {
-        //         // Complex squaring:
-        //         //
-        //         // v0  = c0 * c1
-        //         // c0' = (c0 + c1) * (c0 + \beta*c1) - v0 - \beta * v0
-        //         // c1' = 2 * v0
-        //         //
-        //         // In BLS12-381's F_{p^2}, our \beta is -1 so we
-        //         // can modify this formula:
-        //         //
-        //         // c0' = (c0 + c1) * (c0 - c1)
-        //         // c1' = 2 * c0 * c1
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                unsafe {
+                    wp1_precompiles::syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+                }
+                out.mul_r_inv_internal()
+            } else {
+                // Complex squaring:
+                //
+                // v0  = c0 * c1
+                // c0' = (c0 + c1) * (c0 + \beta*c1) - v0 - \beta * v0
+                // c1' = 2 * v0
+                //
+                // In BLS12-381's F_{p^2}, our \beta is -1 so we
+                // can modify this formula:
+                //
+                // c0' = (c0 + c1) * (c0 - c1)
+                // c1' = 2 * c0 * c1
 
-        //         let a = (&self.c0).add(&self.c1);
-        //         let b = (&self.c0).sub(&self.c1);
-        //         let c = (&self.c0).add(&self.c0);
+                let a = (&self.c0).add(&self.c1);
+                let b = (&self.c0).sub(&self.c1);
+                let c = (&self.c0).add(&self.c0);
 
-        //         Fp2 {
-        //             c0: (&a).mul(&b),
-        //             c1: (&c).mul(&self.c1),
-        //         }
-        //     }
-        // }
+                Fp2 {
+                    c0: (&a).mul(&b),
+                    c1: (&c).mul(&self.c1),
+                }
+            }
+        }
     }
 
     pub fn mul(&self, rhs: &Fp2) -> Fp2 {
@@ -229,13 +229,9 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                    wp1_precompiles::syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
                 }
-                let new_out = Fp2 {
-                    c0: out.c0.reduce_internal(),
-                    c1: out.c1.reduce_internal(),
-                };
-                new_out
+                out.mul_r_inv_internal()
             } else {
                 // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
                 // computes the result as:
@@ -262,7 +258,7 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_add(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                    wp1_precompiles::syscall_bls12381_fp2_add(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
                 }
                 out
             } else {
@@ -279,7 +275,7 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_sub(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                    wp1_precompiles::syscall_bls12381_fp2_sub(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
                 }
                 out
             } else {

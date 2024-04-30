@@ -24,6 +24,13 @@ jobs:
       - uses: ./ci-workflows/.github/actions/install-deps
         with:
           packages: "pkg-config libudev-dev"
+      - name: Install cargo-prove and WP1 toolchain
+        run: |
+          git clone https://github.com/wormhole-foundation/wp1.git
+          cd wp1/cli
+          cargo install --locked --path .
+          cd ~
+          cargo prove install-toolchain
       - uses: Swatinem/rust-cache@v2
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest

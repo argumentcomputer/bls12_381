@@ -601,7 +601,8 @@ impl Fp {
                 unsafe {
                     wp1_precompiles::syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
-                out.mul_r_inv_internal()
+                out.mul_r_inv_internal();
+                out
             } else {
                 let (t0, carry) = mac(0, self.0[0], rhs.0[0], 0);
                 let (t1, carry) = mac(0, self.0[0], rhs.0[1], carry);
@@ -654,22 +655,20 @@ impl Fp {
     /// the internal Montgomery form to a plain BigInt form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
     #[cfg(target_os = "zkvm")]
-    pub(crate) fn mul_r_inv_internal(mut self) -> Fp {
+    pub(crate) fn mul_r_inv_internal(&mut self) {
         unsafe {
             wp1_precompiles::syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R_INV.0.as_ptr() as *const u32);
         }
-        self
     }
 
     /// Internal function to multiply the internal representation by `R`, equivalent to transforming from
     /// a plain BigInt form back to the internal Montgomery form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
     #[cfg(target_os = "zkvm")]
-    pub(crate) fn mul_r_internal(mut self) -> Fp {
+    pub(crate) fn mul_r_internal(&mut self) {
         unsafe {
             wp1_precompiles::syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R.0.as_ptr() as *const u32);
         }
-        self
     }
 
     /// Squares this element.
@@ -681,7 +680,8 @@ impl Fp {
                 unsafe {
                     wp1_precompiles::syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
                 }
-                out.mul_r_inv_internal()
+                out.mul_r_inv_internal();
+                out
             } else {
                 let (t1, carry) = mac(0, self.0[0], self.0[1], 0);
                 let (t2, carry) = mac(0, self.0[0], self.0[2], carry);

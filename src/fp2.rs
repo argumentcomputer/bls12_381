@@ -184,11 +184,9 @@ impl Fp2 {
     /// the internal Montgomery form to a plain BigInt form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
     #[cfg(target_os = "zkvm")]
-    pub(crate) fn mul_r_inv_internal(self) -> Fp2 {
-        Fp2 {
-            c0: self.c0.mul_r_inv_internal(),
-            c1: self.c1.mul_r_inv_internal(),
-        }
+    pub(crate) fn mul_r_inv_internal(&mut self) {
+        self.c0.mul_r_inv_internal();
+        self.c1.mul_r_inv_internal();
     }
 
     pub fn square(&self) -> Fp2 {
@@ -198,7 +196,8 @@ impl Fp2 {
                 unsafe {
                     wp1_precompiles::syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
                 }
-                out.mul_r_inv_internal()
+                out.mul_r_inv_internal();
+                out
             } else {
                 // Complex squaring:
                 //
@@ -231,7 +230,8 @@ impl Fp2 {
                 unsafe {
                     wp1_precompiles::syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
                 }
-                out.mul_r_inv_internal()
+                out.mul_r_inv_internal();
+                out
             } else {
                 // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
                 // computes the result as:

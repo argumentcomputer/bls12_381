@@ -8,7 +8,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 use crate::fp::Fp;
 
 #[derive(Copy, Clone)]
-#[repr(C)] // NOTE: this might be *technically* required for ensuring the memory layout used in the zkvm is valid?
+#[repr(C)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
 pub struct Fp2 {
     pub c0: Fp,
     pub c1: Fp,

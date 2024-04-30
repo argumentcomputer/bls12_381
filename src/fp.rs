@@ -12,7 +12,7 @@ use crate::util::{adc, mac, sbb};
 // integers in little-endian order. `Fp` values are always in
 // Montgomery form; i.e., Scalar(a) = aR mod p, with R = 2^384.
 #[derive(Copy, Clone)]
-#[repr(transparent)] // NOTE: this might be *technically* required for ensuring the memory layout used in the zkvm is valid?
+#[repr(transparent)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
 pub struct Fp(pub(crate) [u64; 6]);
 
 impl fmt::Debug for Fp {

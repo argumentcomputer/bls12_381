@@ -25,6 +25,7 @@ use crate::Scalar;
 /// "unchecked" API was misused.
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
+#[repr(C)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
 pub struct G1Affine {
     pub x: Fp,
     pub y: Fp,

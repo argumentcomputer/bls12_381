@@ -17,11 +17,6 @@ use group::WnafGroup;
 use crate::fp::Fp;
 use crate::Scalar;
 
-#[cfg(target_os = "zkvm")]
-extern "C" {
-    fn syscall_bls12381_g1_decompress(p: &mut [u8; 96]);
-}
-
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
 /// improve performance through the use of mixed curve model arithmetic.
@@ -30,6 +25,7 @@ extern "C" {
 /// "unchecked" API was misused.
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
+#[repr(C)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
 pub struct G1Affine {
     pub x: Fp,
     pub y: Fp,
@@ -334,7 +330,7 @@ impl G1Affine {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
+                    wp1_precompiles::syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1).and_then(|p| CtOption::new(p, p.is_torsion_free()))
             } else {
@@ -356,7 +352,7 @@ impl G1Affine {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
+                    wp1_precompiles::syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1)
             } else {
@@ -441,6 +437,46 @@ impl G1Affine {
     pub fn is_on_curve(&self) -> Choice {
         // y^2 - x^3 ?= 4
         (self.y.square() - (self.x.square() * self.x)).ct_eq(&B) | self.infinity
+    }
+
+    /// Adds two affine points together.
+    /// In the zkvm context, this is accelerated with precompiles. In regular rust, this entails
+    /// converting one of the points to projective coordinates and then converting the output back.
+    pub fn add_affine(&self, rhs: &Self) -> Self {
+        if self.is_identity().into() {
+            return rhs.clone();
+        } else if rhs.is_identity().into() {
+            return self.clone();
+        }
+
+        cfg_if::cfg_if! {
+            if #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))] {
+                let mut res = self.clone();
+                res.x.mul_r_inv_internal();
+                res.y.mul_r_inv_internal();
+                // The add precompile only works when P != Q
+                if self != rhs {
+                    let mut other = rhs.clone();
+                    other.x.mul_r_inv_internal();
+                    other.y.mul_r_inv_internal();
+                    unsafe {
+                        wp1_precompiles::syscall_bls12381_g1_add(res.x.0.as_mut_ptr() as *mut u32, other.x.0.as_ptr() as *const u32);
+                    }
+                } else {
+                    // In this case, use the double precompile instead
+                    unsafe {
+                        wp1_precompiles::syscall_bls12381_g1_double(res.x.0.as_mut_ptr() as *mut u32);
+                    }
+                }
+                res.x.mul_r_internal();
+                res.y.mul_r_internal();
+                res
+            } else {
+                let proj = G1Projective::from(rhs);
+                let res = proj + self;
+                G1Affine::from(res)
+            }
+        }
     }
 }
 

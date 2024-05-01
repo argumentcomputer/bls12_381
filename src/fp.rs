@@ -8,6 +8,14 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::util::{adc, mac, sbb};
 
+// Accelerated precompiles for zkvm. Defined directly to prevent circular dependency issues.
+#[cfg(target_os = "zkvm")]
+extern "C" {
+    fn syscall_bls12381_fp_add(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp_sub(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_fp_mul(p: *mut u32, q: *const u32);
+}
+
 // The internal representation of this type is six 64-bit unsigned
 // integers in little-endian order. `Fp` values are always in
 // Montgomery form; i.e., Scalar(a) = aR mod p, with R = 2^384.
@@ -396,7 +404,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    wp1_precompiles::syscall_bls12381_fp_add(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_add(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
                 out
             } else {
@@ -442,10 +450,10 @@ impl Fp {
     #[inline]
     pub fn sub(&self, rhs: &Fp) -> Fp {
         cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
+            if #[cfg(all(target_os = "zkvm"))] {
                 let mut out = self.clone();
                 unsafe {
-                    wp1_precompiles::syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
                 out
             } else {
@@ -599,7 +607,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    wp1_precompiles::syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
                 }
                 out.mul_r_inv_internal();
                 out
@@ -657,7 +665,7 @@ impl Fp {
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_inv_internal(&mut self) {
         unsafe {
-            wp1_precompiles::syscall_bls12381_fp_mul(
+            syscall_bls12381_fp_mul(
                 self.0.as_mut_ptr() as *mut u32,
                 R_INV.0.as_ptr() as *const u32,
             );
@@ -670,10 +678,7 @@ impl Fp {
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_internal(&mut self) {
         unsafe {
-            wp1_precompiles::syscall_bls12381_fp_mul(
-                self.0.as_mut_ptr() as *mut u32,
-                R.0.as_ptr() as *const u32,
-            );
+            syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R.0.as_ptr() as *const u32);
         }
     }
 
@@ -684,7 +689,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    wp1_precompiles::syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_mul(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
                 }
                 out.mul_r_inv_internal();
                 out

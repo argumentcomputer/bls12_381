@@ -36,9 +36,6 @@ required-features = ["experimental"]
 [dependencies]
 cfg-if = "1.0.0"
 
-[target.'cfg(target_os = "zkvm")'.dependencies]
-wp1-precompiles = { git = "ssh://git@github.com/wormhole-foundation/wp1", branch = "dev" }
-
 [dependencies.digest]
 version = "0.9"
 optional = true

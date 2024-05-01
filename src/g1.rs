@@ -17,6 +17,14 @@ use group::WnafGroup;
 use crate::fp::Fp;
 use crate::Scalar;
 
+// Accelerated precompiles for zkvm. Defined directly to prevent circular dependency issues.
+#[cfg(target_os = "zkvm")]
+extern "C" {
+    fn syscall_bls12381_g1_decompress(p: &mut [u8; 96]);
+    fn syscall_bls12381_g1_add(p: *mut u32, q: *const u32);
+    fn syscall_bls12381_g1_double(p: *mut u32);
+}
+
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
 /// improve performance through the use of mixed curve model arithmetic.
@@ -326,11 +334,11 @@ impl G1Affine {
     /// for details about how group elements are serialized.
     pub fn from_compressed(bytes: &[u8; 48]) -> CtOption<Self> {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))] {
+            if #[cfg(all(target_os = "zkvm"))] {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    wp1_precompiles::syscall_bls12381_g1_decompress(&mut decompressed_g1);
+                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1).and_then(|p| CtOption::new(p, p.is_torsion_free()))
             } else {
@@ -348,11 +356,11 @@ impl G1Affine {
     /// API invariants may be broken.** Please consider using `from_compressed()` instead.
     pub fn from_compressed_unchecked(bytes: &[u8; 48]) -> CtOption<Self> {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))] {
+            if #[cfg(all(target_os = "zkvm"))] {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
-                    wp1_precompiles::syscall_bls12381_g1_decompress(&mut decompressed_g1);
+                    syscall_bls12381_g1_decompress(&mut decompressed_g1);
                 }
                 Self::from_uncompressed_unchecked(&decompressed_g1)
             } else {
@@ -450,7 +458,7 @@ impl G1Affine {
         }
 
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))] {
+            if #[cfg(all(target_os = "zkvm"))] {
                 let mut res = self.clone();
                 res.x.mul_r_inv_internal();
                 res.y.mul_r_inv_internal();
@@ -460,12 +468,12 @@ impl G1Affine {
                     other.x.mul_r_inv_internal();
                     other.y.mul_r_inv_internal();
                     unsafe {
-                        wp1_precompiles::syscall_bls12381_g1_add(res.x.0.as_mut_ptr() as *mut u32, other.x.0.as_ptr() as *const u32);
+                        syscall_bls12381_g1_add(res.x.0.as_mut_ptr() as *mut u32, other.x.0.as_ptr() as *const u32);
                     }
                 } else {
                     // In this case, use the double precompile instead
                     unsafe {
-                        wp1_precompiles::syscall_bls12381_g1_double(res.x.0.as_mut_ptr() as *mut u32);
+                        syscall_bls12381_g1_double(res.x.0.as_mut_ptr() as *mut u32);
                     }
                 }
                 res.x.mul_r_internal();

@@ -199,7 +199,7 @@ impl Fp2 {
 
     pub fn square(&self) -> Fp2 {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm"))] {
+            if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp2_mul(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);

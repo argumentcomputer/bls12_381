@@ -450,7 +450,7 @@ impl Fp {
     #[inline]
     pub fn sub(&self, rhs: &Fp) -> Fp {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm"))] {
+            if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
                     syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);

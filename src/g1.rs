@@ -334,7 +334,7 @@ impl G1Affine {
     /// for details about how group elements are serialized.
     pub fn from_compressed(bytes: &[u8; 48]) -> CtOption<Self> {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm"))] {
+            if #[cfg(target_os = "zkvm")] {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
@@ -356,7 +356,7 @@ impl G1Affine {
     /// API invariants may be broken.** Please consider using `from_compressed()` instead.
     pub fn from_compressed_unchecked(bytes: &[u8; 48]) -> CtOption<Self> {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm"))] {
+            if #[cfg(target_os = "zkvm")] {
                 let mut decompressed_g1 = [0u8; 96];
                 decompressed_g1[..48].copy_from_slice(bytes);
                 unsafe {
@@ -458,7 +458,7 @@ impl G1Affine {
         }
 
         cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "zkvm"))] {
+            if #[cfg(target_os = "zkvm")] {
                 let mut res = self.clone();
                 res.x.mul_r_inv_internal();
                 res.y.mul_r_inv_internal();

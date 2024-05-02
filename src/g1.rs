@@ -459,26 +459,36 @@ impl G1Affine {
 
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut res = self.clone();
-                res.x.mul_r_inv_internal();
-                res.y.mul_r_inv_internal();
-                // The add precompile only works when P != Q
-                if self != rhs {
+                // The add precompile only works when P != Q and P != -Q
+                if self.x != rhs.x {
+                    // In this case, we know that P != Q and P != -Q, since both Q and -Q have the same `x` coordinate
+                    let mut res = self.clone();
+                    res.x.mul_r_inv_internal();
+                    res.y.mul_r_inv_internal();
                     let mut other = rhs.clone();
                     other.x.mul_r_inv_internal();
                     other.y.mul_r_inv_internal();
                     unsafe {
                         syscall_bls12381_g1_add(res.x.0.as_mut_ptr() as *mut u32, other.x.0.as_ptr() as *const u32);
                     }
-                } else {
-                    // In this case, use the double precompile instead
+                    res.x.mul_r_internal();
+                    res.y.mul_r_internal();
+                    res
+                } else if self.y == rhs.y {
+                    // In this case, we know that P == Q, since both `x` and `y` are equal, so use the double precompile instead
+                    let mut res = self.clone();
+                    res.x.mul_r_inv_internal();
+                    res.y.mul_r_inv_internal();
                     unsafe {
                         syscall_bls12381_g1_double(res.x.0.as_mut_ptr() as *mut u32);
                     }
+                    res.x.mul_r_internal();
+                    res.y.mul_r_internal();
+                    res
+                } else {
+                    // In this case, we know that P == -Q, since `x` is equal but `y` is different, so we can just return the identity
+                    Self::identity()
                 }
-                res.x.mul_r_internal();
-                res.y.mul_r_internal();
-                res
             } else {
                 let proj = G1Projective::from(rhs);
                 let res = proj + self;

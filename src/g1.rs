@@ -448,6 +448,7 @@ impl G1Affine {
     }
 
     /// Adds two affine points together.
+    /// This function assumes that both values are on the curve.
     /// In the zkvm context, this is accelerated with precompiles. In regular rust, this entails
     /// converting one of the points to projective coordinates and then converting the output back.
     pub fn add_affine(&self, rhs: &Self) -> Self {

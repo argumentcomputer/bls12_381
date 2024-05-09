@@ -113,6 +113,22 @@ impl Fp12 {
         }
     }
 
+    #[cfg(target_os = "zkvm")]
+    pub fn mul_by_014(&self, c0: &Fp2, c1: &Fp2, c4: &Fp2) -> Fp12 {
+        let aa = self.c0.mul_by_01(c0, c1);
+        let bb = self.c1.mul_by_1(c4);
+        let o = c1 + c4;
+        let c1 = self.c1 + self.c0;
+        let mut c1 = c1.mul_by_01(c0, &o);
+        c1.sub_inp(&aa);
+        c1.sub_inp(&bb);
+        let mut c0 = bb.mul_by_nonresidue();
+        c0.add_inp(&aa);
+
+        Fp12 { c0, c1 }
+    }
+
+    #[cfg(not(target_os = "zkvm"))]
     pub fn mul_by_014(&self, c0: &Fp2, c1: &Fp2, c4: &Fp2) -> Fp12 {
         let aa = self.c0.mul_by_01(c0, c1);
         let bb = self.c1.mul_by_1(c4);
@@ -130,6 +146,11 @@ impl Fp12 {
     #[inline(always)]
     pub fn is_zero(&self) -> Choice {
         self.c0.is_zero() & self.c1.is_zero()
+    }
+
+    #[inline]
+    pub fn conjugate_inp(&mut self) {
+        self.c1 = -self.c1;
     }
 
     #[inline(always)]
@@ -170,6 +191,27 @@ impl Fp12 {
         Fp12 { c0, c1 }
     }
 
+    #[inline]
+    pub fn square_inp(&mut self) {
+        todo!()
+    }
+
+    #[cfg(target_os = "zkvm")]
+    #[inline]
+    pub fn square(&self) -> Self {
+        let ab = self.c0 * self.c1;
+        let mut c0c1 = self.c0;
+        c0c1.add_inp(&self.c1);
+        let mut c0 = self.c1.mul_by_nonresidue();
+        c0.add_inp(&self.c0);
+        c0 = c0 * c0c1;
+        c0.sub_inp(&ab);
+        c0.sub_inp(&ab.mul_by_nonresidue());
+
+        Fp12 { c0, c1: ab + ab }
+    }
+
+    #[cfg(not(target_os = "zkvm"))]
     #[inline]
     pub fn square(&self) -> Self {
         let ab = self.c0 * self.c1;

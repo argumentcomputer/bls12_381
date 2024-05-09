@@ -162,6 +162,18 @@ impl Fp2 {
     }
 
     #[inline(always)]
+    pub fn mul_by_nonresidue_inp(&mut self) {
+        // Multiply a + bu by u + 1, getting
+        // au + a + bu^2 + bu
+        // and because u^2 = -1, we get
+        // (a - b) + (a + b)u
+
+        let tmp = self.c0 + self.c1;
+        self.c0.sub_inp(&self.c1);
+        self.c1 = tmp;
+    }
+
+    #[inline(always)]
     pub fn mul_by_nonresidue(&self) -> Fp2 {
         // Multiply a + bu by u + 1, getting
         // au + a + bu^2 + bu
@@ -195,6 +207,20 @@ impl Fp2 {
     pub(crate) fn mul_r_inv_internal(&mut self) {
         self.c0.mul_r_inv_internal();
         self.c1.mul_r_inv_internal();
+    }
+
+    #[inline(always)]
+    pub fn square_inp(&mut self) {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp2_mul(self.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+                }
+                self.mul_r_inv_internal();
+            } else {
+                unreachable!();
+            }
+        }
     }
 
     pub fn square(&self) -> Fp2 {
@@ -231,6 +257,21 @@ impl Fp2 {
         }
     }
 
+    #[inline(always)]
+    pub fn mul_inp(&mut self, rhs: &Fp2) {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp2_mul(self.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                }
+                self.mul_r_inv_internal();
+            } else {
+                let _ = rhs;
+                unreachable!();
+            }
+        }
+    }
+
     pub fn mul(&self, rhs: &Fp2) -> Fp2 {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
@@ -261,6 +302,33 @@ impl Fp2 {
         }
     }
 
+    #[inline(always)]
+    pub fn add_inp(&mut self, rhs: &Fp2) {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp2_add(self.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                }
+            } else {
+                let _ = rhs;
+                unreachable!();
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn double_inp(&mut self) {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp2_add(self.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+                }
+            } else {
+                unreachable!();
+            }
+        }
+    }
+
     pub fn add(&self, rhs: &Fp2) -> Fp2 {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
@@ -274,6 +342,20 @@ impl Fp2 {
                     c0: (&self.c0).add(&rhs.c0),
                     c1: (&self.c1).add(&rhs.c1),
                 }
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn sub_inp(&mut self, rhs: &Fp2) {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp2_sub(self.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                }
+            } else {
+                let _ = rhs;
+                unreachable!();
             }
         }
     }
@@ -295,10 +377,20 @@ impl Fp2 {
         }
     }
 
-    pub const fn neg(&self) -> Fp2 {
-        Fp2 {
-            c0: (&self.c0).neg(),
-            c1: (&self.c1).neg(),
+    pub fn neg(&self) -> Fp2 {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = Fp2::zero();
+                unsafe {
+                    syscall_bls12381_fp2_sub(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                Fp2 {
+                    c0: (&self.c0).neg(),
+                    c1: (&self.c1).neg(),
+                }
+            }
         }
     }
 

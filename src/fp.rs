@@ -464,8 +464,22 @@ impl Fp {
 
     /// Returns `c = a.zip(b).fold(0, |acc, (a_i, b_i)| acc + a_i * b_i)`.
     ///
+    /// Uses precompiles to calculate it naively but much more cheaply.
+    #[cfg(target_os = "zkvm")]
+    #[inline]
+    pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
+        let mut out = Fp::zero();
+        for (ai, bi) in a.into_iter().zip(b) {
+            out += ai * bi;
+        }
+        out
+    }
+
+    /// Returns `c = a.zip(b).fold(0, |acc, (a_i, b_i)| acc + a_i * b_i)`.
+    ///
     /// Implements Algorithm 2 from Patrick Longa's
     /// [ePrint 2022-367](https://eprint.iacr.org/2022/367) §3.
+    #[cfg(not(target_os = "zkvm"))]
     #[inline]
     pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
         // For a single `a x b` multiplication, operand scanning (schoolbook) takes each

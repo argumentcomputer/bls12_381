@@ -161,7 +161,8 @@ impl Fp2 {
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn mul_by_nonresidue_inp(&mut self) {
         // Multiply a + bu by u + 1, getting
         // au + a + bu^2 + bu
@@ -203,24 +204,23 @@ impl Fp2 {
     /// Internal function to multiply the internal representation by `R_INV`, equivalent to transforming from
     /// the internal Montgomery form to a plain BigInt form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[inline]
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_inv_internal(&mut self) {
         self.c0.mul_r_inv_internal();
         self.c1.mul_r_inv_internal();
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn square_inp(&mut self) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp2_mul(self.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
-                }
-                self.mul_r_inv_internal();
-            } else {
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp2_mul(
+                self.c0.0.as_mut_ptr() as *mut u32,
+                self.c0.0.as_ptr() as *const u32,
+            );
         }
+        self.mul_r_inv_internal();
     }
 
     pub fn square(&self) -> Fp2 {
@@ -257,19 +257,16 @@ impl Fp2 {
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn mul_inp(&mut self, rhs: &Fp2) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp2_mul(self.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
-                }
-                self.mul_r_inv_internal();
-            } else {
-                let _ = rhs;
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp2_mul(
+                self.c0.0.as_mut_ptr() as *mut u32,
+                rhs.c0.0.as_ptr() as *const u32,
+            );
         }
+        self.mul_r_inv_internal();
     }
 
     pub fn mul(&self, rhs: &Fp2) -> Fp2 {
@@ -302,30 +299,25 @@ impl Fp2 {
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn add_inp(&mut self, rhs: &Fp2) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp2_add(self.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
-                }
-            } else {
-                let _ = rhs;
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp2_add(
+                self.c0.0.as_mut_ptr() as *mut u32,
+                rhs.c0.0.as_ptr() as *const u32,
+            );
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn double_inp(&mut self) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp2_add(self.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
-                }
-            } else {
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp2_add(
+                self.c0.0.as_mut_ptr() as *mut u32,
+                self.c0.0.as_ptr() as *const u32,
+            );
         }
     }
 
@@ -346,17 +338,14 @@ impl Fp2 {
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn sub_inp(&mut self, rhs: &Fp2) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp2_sub(self.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
-                }
-            } else {
-                let _ = rhs;
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp2_sub(
+                self.c0.0.as_mut_ptr() as *mut u32,
+                rhs.c0.0.as_ptr() as *const u32,
+            );
         }
     }
 

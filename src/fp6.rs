@@ -111,6 +111,7 @@ impl Fp6 {
     }
 
     #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn add_inp(&mut self, rhs: &Fp6) {
         self.c0.add_inp(&rhs.c0);
         self.c1.add_inp(&rhs.c1);
@@ -118,6 +119,7 @@ impl Fp6 {
     }
 
     #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn sub_inp(&mut self, rhs: &Fp6) {
         self.c0.sub_inp(&rhs.c0);
         self.c1.sub_inp(&rhs.c1);

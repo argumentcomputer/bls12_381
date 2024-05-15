@@ -113,6 +113,7 @@ impl Fp12 {
         }
     }
 
+    #[inline]
     #[cfg(target_os = "zkvm")]
     pub fn mul_by_014(&self, c0: &Fp2, c1: &Fp2, c4: &Fp2) -> Fp12 {
         let aa = self.c0.mul_by_01(c0, c1);
@@ -192,12 +193,7 @@ impl Fp12 {
     }
 
     #[inline]
-    pub fn square_inp(&mut self) {
-        todo!()
-    }
-
     #[cfg(target_os = "zkvm")]
-    #[inline]
     pub fn square(&self) -> Self {
         let ab = self.c0 * self.c1;
         let mut c0c1 = self.c0;
@@ -211,8 +207,8 @@ impl Fp12 {
         Fp12 { c0, c1: ab + ab }
     }
 
-    #[cfg(not(target_os = "zkvm"))]
     #[inline]
+    #[cfg(not(target_os = "zkvm"))]
     pub fn square(&self) -> Self {
         let ab = self.c0 * self.c1;
         let c0c1 = self.c0 + self.c1;

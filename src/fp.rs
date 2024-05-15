@@ -499,11 +499,11 @@ impl Fp {
     /// Uses precompiles to calculate it naively but much more cheaply.
     #[inline]
     #[cfg(target_os = "zkvm")]
-    pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
+    pub(crate) fn sum_of_products<const T: usize>(mut a: [Fp; T], b: [Fp; T]) -> Fp {
         let mut out = Fp::zero();
-        for (mut ai, bi) in a.into_iter().zip(b) {
-            ai.mul_inp(&bi);
-            out.add_inp(&ai);
+        for (ai, bi) in a.iter_mut().zip(b.iter()) {
+            ai.mul_inp(bi);
+            out.add_inp(ai);
         }
         out
     }

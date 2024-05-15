@@ -46,7 +46,6 @@ impl MillerLoopResult {
     /// operation in the so-called `cyclotomic subgroup` of `Fq6` so that
     /// it can be compared with other elements of `Gt`.
     pub fn final_exponentiation(&self) -> Gt {
-        println!("cycle-tracker-start: final_exponentiation");
         #[must_use]
         fn fp4_square(a: Fp2, b: Fp2) -> (Fp2, Fp2) {
             let t0 = a.square();
@@ -140,8 +139,7 @@ impl MillerLoopResult {
             .frobenius_map()
             .frobenius_map()
             .frobenius_map();
-        let res = Gt(f
-            .invert()
+        Gt(f.invert()
             .map(|mut t1| {
                 let mut t2 = t0 * t1;
                 t1 = t2;
@@ -174,9 +172,7 @@ impl MillerLoopResult {
             // We unwrap() because `MillerLoopResult` can only be constructed
             // by a function within this crate, and we uphold the invariant
             // that the enclosed value is nonzero.
-            .unwrap());
-        println!("cycle-tracker-end: final_exponentiation");
-        res
+            .unwrap())
     }
 }
 
@@ -556,7 +552,6 @@ impl From<G2Affine> for G2Prepared {
 ///
 /// Requires the `alloc` and `pairing` crate features to be enabled.
 pub fn multi_miller_loop(terms: &[(&G1Affine, &G2Prepared)]) -> MillerLoopResult {
-    println!("cycle-tracker-start: multi_miller_loop");
     struct Adder<'a, 'b, 'c> {
         terms: &'c [(&'a G1Affine, &'b G2Prepared)],
         index: usize,
@@ -598,10 +593,7 @@ pub fn multi_miller_loop(terms: &[(&G1Affine, &G2Prepared)]) -> MillerLoopResult
 
     let mut adder = Adder { terms, index: 0 };
 
-    let tmp = miller_loop(&mut adder);
-    println!("cycle-tracker-start: multi_miller_loop");
-
-    MillerLoopResult(tmp)
+    MillerLoopResult(miller_loop(&mut adder))
 }
 
 /// Invoke the pairing function without the use of precomputation and other optimizations.
@@ -668,7 +660,6 @@ trait MillerLoopDriver {
 /// structure elsewhere; instead, we'll write concrete instantiations of
 /// `MillerLoopDriver` for whatever purposes we need (such as caching modes).
 fn miller_loop<D: MillerLoopDriver>(driver: &mut D) -> D::Output {
-    println!("cycle-tracker-start: miller_loop");
     let mut f = D::one();
 
     let mut found_one = false;
@@ -692,7 +683,6 @@ fn miller_loop<D: MillerLoopDriver>(driver: &mut D) -> D::Output {
     if BLS_X_IS_NEGATIVE {
         D::conjugate(&mut f);
     }
-    println!("cycle-tracker-end: miller_loop");
 
     f
 }

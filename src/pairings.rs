@@ -815,34 +815,61 @@ fn doubling_step(r: &mut G2Projective) -> (Fp2, Fp2, Fp2) {
 #[cfg(target_os = "zkvm")]
 fn addition_step(r: &mut G2Projective, q: &G2Affine) -> (Fp2, Fp2, Fp2) {
     // Adaptation of Algorithm 27, https://eprint.iacr.org/2010/354.pdf
-    let zsquared = r.z.square();
-    let ysquared = q.y.square();
-    let t0 = zsquared * q.x;
-    let t1 = ((q.y + r.z).square() - ysquared - zsquared) * zsquared;
-    let t2 = t0 - r.x;
-    let t3 = t2.square();
-    let t4 = t3 + t3;
-    let t4 = t4 + t4;
-    let t5 = t4 * t2;
-    let t6 = t1 - r.y - r.y;
-    let t9 = t6 * q.x;
-    let t7 = t4 * r.x;
-    r.x = t6.square() - t5 - t7 - t7;
-    r.z = (r.z + t2).square() - zsquared - t3;
-    let t10 = q.y + r.z;
-    let t8 = (t7 - r.x) * t6;
-    let t0 = r.y * t5;
-    let t0 = t0 + t0;
-    r.y = t8 - t0;
-    let t10 = t10.square() - ysquared;
-    let ztsquared = r.z.square();
-    let t10 = t10 - ztsquared;
-    let t9 = t9 + t9 - t10;
-    let t10 = r.z + r.z;
-    let t6 = -t6;
-    let t1 = t6 + t6;
+    let mut zsquared = r.z;
+    zsquared.square_inp();
+    let mut ysquared = q.y;
+    ysquared.square_inp();
+    let mut t0 = q.y;
+    t0.add_inp(&r.z);
+    t0.square_inp();
+    t0.sub_inp(&ysquared);
+    t0.sub_inp(&zsquared);
+    t0.mul_inp(&zsquared);
+    let mut t1 = zsquared;
+    t1.mul_inp(&q.x);
+    t1.sub_inp(&r.x);
+    let mut t2 = t1;
+    t2.square_inp();
+    let mut t3 = t2;
+    t3.double_inp();
+    t3.double_inp();
+    let mut t4 = t3;
+    t4.mul_inp(&t1);
+    t0.sub_inp(&r.y);
+    t0.sub_inp(&r.y);
+    let mut t5 = t0;
+    t5.mul_inp(&q.x);
+    t3.mul_inp(&r.x);
+    r.x = t0;
+    r.x.square_inp();
+    r.x.sub_inp(&t4);
+    r.x.sub_inp(&t3);
+    r.x.sub_inp(&t3);
+    r.z.add_inp(&t1);
+    r.z.square_inp();
+    r.z.sub_inp(&zsquared);
+    r.z.sub_inp(&t2);
+    let mut t6 = q.y;
+    t6.add_inp(&r.z);
+    t3.sub_inp(&r.x);
+    t3.mul_inp(&t0);
+    t4.mul_inp(&r.y);
+    t4.double_inp();
+    r.y = t3;
+    r.y.sub_inp(&t4);
+    t6.square_inp();
+    t6.sub_inp(&ysquared);
+    let mut ztsquared = r.z;
+    ztsquared.square_inp();
+    t6.sub_inp(&ztsquared);
+    t5.double_inp();
+    t5.sub_inp(&t6);
+    let mut t6 = r.z;
+    t6.double_inp();
+    let mut t0 = -t0;
+    t0.double_inp();
 
-    (t10, t1, t9)
+    (t6, t0, t5)
 }
 
 #[cfg(not(target_os = "zkvm"))]

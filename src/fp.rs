@@ -398,17 +398,14 @@ impl Fp {
         Fp([r0, r1, r2, r3, r4, r5])
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn add_inp(&mut self, rhs: &Fp) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp_add(self.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
-                }
-            } else {
-                let _ = rhs;
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp_add(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
         }
     }
 
@@ -471,17 +468,14 @@ impl Fp {
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn sub_inp(&mut self, rhs: &Fp) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp_sub(self.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
-                }
-            } else {
-                let _ = rhs;
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp_sub(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
         }
     }
 
@@ -503,8 +497,8 @@ impl Fp {
     /// Returns `c = a.zip(b).fold(0, |acc, (a_i, b_i)| acc + a_i * b_i)`.
     ///
     /// Uses precompiles to calculate it naively but much more cheaply.
-    #[cfg(target_os = "zkvm")]
     #[inline]
+    #[cfg(target_os = "zkvm")]
     pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
         let mut out = Fp::zero();
         for (ai, bi) in a.into_iter().zip(b) {
@@ -513,8 +507,8 @@ impl Fp {
         out
     }
 
-    #[cfg(not(target_os = "zkvm"))]
     #[inline]
+    #[cfg(not(target_os = "zkvm"))]
     pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
         // For a single `a x b` multiplication, operand scanning (schoolbook) takes each
         // limb of `a` in turn, and multiplies it by all of the limbs of `b` to compute
@@ -650,18 +644,15 @@ impl Fp {
     }
 
     #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn mul_inp(&mut self, rhs: &Fp) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
-                }
-                self.mul_r_inv_internal();
-            } else {
-                let _ = rhs;
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp_mul(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
         }
+        self.mul_r_inv_internal();
     }
 
     #[inline]
@@ -725,6 +716,7 @@ impl Fp {
     /// Internal function to multiply the internal representation by `R_INV`, equivalent to transforming from
     /// the internal Montgomery form to a plain BigInt form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[inline]
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_inv_internal(&mut self) {
         unsafe {
@@ -738,6 +730,7 @@ impl Fp {
     /// Internal function to multiply the internal representation by `R`, equivalent to transforming from
     /// a plain BigInt form back to the internal Montgomery form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[inline]
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_internal(&mut self) {
         unsafe {
@@ -745,18 +738,16 @@ impl Fp {
         }
     }
 
-    #[inline(always)]
+    #[inline]
+    #[cfg(target_os = "zkvm")]
     pub fn square_inp(&mut self) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                unsafe {
-                    syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
-                }
-                self.mul_r_inv_internal();
-            } else {
-                unreachable!();
-            }
+        unsafe {
+            syscall_bls12381_fp_mul(
+                self.0.as_mut_ptr() as *mut u32,
+                self.0.as_ptr() as *const u32,
+            );
         }
+        self.mul_r_inv_internal();
     }
 
     /// Squares this element.

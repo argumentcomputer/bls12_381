@@ -228,7 +228,7 @@ impl Fp {
 
     /// Converts an element of `Fp` into a byte representation in
     /// big-endian byte order.
-    pub fn to_bytes(self) -> [u8; 48] {
+    pub fn to_bytes(&self) -> [u8; 48] {
         // Turn into canonical form by computing
         // (a.R) / R = a
         let tmp = Fp::montgomery_reduce(
@@ -399,6 +399,17 @@ impl Fp {
     }
 
     #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn add_inp(&mut self, rhs: &Fp) {
+        unsafe {
+            syscall_bls12381_fp_add(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
+        }
+    }
+
+    #[inline]
     pub fn add(&self, rhs: &Fp) -> Fp {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
@@ -423,28 +434,49 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn neg(&self) -> Fp {
-        let (d0, borrow) = sbb(MODULUS[0], self.0[0], 0);
-        let (d1, borrow) = sbb(MODULUS[1], self.0[1], borrow);
-        let (d2, borrow) = sbb(MODULUS[2], self.0[2], borrow);
-        let (d3, borrow) = sbb(MODULUS[3], self.0[3], borrow);
-        let (d4, borrow) = sbb(MODULUS[4], self.0[4], borrow);
-        let (d5, _) = sbb(MODULUS[5], self.0[5], borrow);
+    pub fn neg(&self) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = Fp::zero();
+                unsafe {
+                    syscall_bls12381_fp_sub(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                let (d0, borrow) = sbb(MODULUS[0], self.0[0], 0);
+                let (d1, borrow) = sbb(MODULUS[1], self.0[1], borrow);
+                let (d2, borrow) = sbb(MODULUS[2], self.0[2], borrow);
+                let (d3, borrow) = sbb(MODULUS[3], self.0[3], borrow);
+                let (d4, borrow) = sbb(MODULUS[4], self.0[4], borrow);
+                let (d5, _) = sbb(MODULUS[5], self.0[5], borrow);
 
-        // Let's use a mask if `self` was zero, which would mean
-        // the result of the subtraction is p.
-        let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3] | self.0[4] | self.0[5]) == 0)
-            as u64)
-            .wrapping_sub(1);
+                // Let's use a mask if `self` was zero, which would mean
+                // the result of the subtraction is p.
+                let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3] | self.0[4] | self.0[5]) == 0)
+                            as u64)
+                    .wrapping_sub(1);
 
-        Fp([
-            d0 & mask,
-            d1 & mask,
-            d2 & mask,
-            d3 & mask,
-            d4 & mask,
-            d5 & mask,
-        ])
+                Fp([
+                    d0 & mask,
+                    d1 & mask,
+                    d2 & mask,
+                    d3 & mask,
+                    d4 & mask,
+                    d5 & mask,
+                ])
+            }
+        }
+    }
+
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn sub_inp(&mut self, rhs: &Fp) {
+        unsafe {
+            syscall_bls12381_fp_sub(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
+        }
     }
 
     #[inline]
@@ -465,12 +497,13 @@ impl Fp {
     /// Returns `c = a.zip(b).fold(0, |acc, (a_i, b_i)| acc + a_i * b_i)`.
     ///
     /// Uses precompiles to calculate it naively but much more cheaply.
-    #[cfg(target_os = "zkvm")]
     #[inline]
-    pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
+    #[cfg(target_os = "zkvm")]
+    pub(crate) fn sum_of_products<const T: usize>(mut a: [Fp; T], b: [Fp; T]) -> Fp {
         let mut out = Fp::zero();
-        for (ai, bi) in a.into_iter().zip(b) {
-            out += ai * bi;
+        for (ai, bi) in a.iter_mut().zip(b.iter()) {
+            ai.mul_inp(bi);
+            out.add_inp(ai);
         }
         out
     }
@@ -479,8 +512,8 @@ impl Fp {
     ///
     /// Implements Algorithm 2 from Patrick Longa's
     /// [ePrint 2022-367](https://eprint.iacr.org/2022/367) §3.
-    #[cfg(not(target_os = "zkvm"))]
     #[inline]
+    #[cfg(not(target_os = "zkvm"))]
     pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
         // For a single `a x b` multiplication, operand scanning (schoolbook) takes each
         // limb of `a` in turn, and multiplies it by all of the limbs of `b` to compute
@@ -616,6 +649,18 @@ impl Fp {
     }
 
     #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn mul_inp(&mut self, rhs: &Fp) {
+        unsafe {
+            syscall_bls12381_fp_mul(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
+        }
+        self.mul_r_inv_internal();
+    }
+
+    #[inline]
     pub fn mul(&self, rhs: &Fp) -> Fp {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
@@ -676,6 +721,7 @@ impl Fp {
     /// Internal function to multiply the internal representation by `R_INV`, equivalent to transforming from
     /// the internal Montgomery form to a plain BigInt form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[inline]
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_inv_internal(&mut self) {
         unsafe {
@@ -689,11 +735,24 @@ impl Fp {
     /// Internal function to multiply the internal representation by `R`, equivalent to transforming from
     /// a plain BigInt form back to the internal Montgomery form.
     /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[inline]
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_internal(&mut self) {
         unsafe {
             syscall_bls12381_fp_mul(self.0.as_mut_ptr() as *mut u32, R.0.as_ptr() as *const u32);
         }
+    }
+
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn square_inp(&mut self) {
+        unsafe {
+            syscall_bls12381_fp_mul(
+                self.0.as_mut_ptr() as *mut u32,
+                self.0.as_ptr() as *const u32,
+            );
+        }
+        self.mul_r_inv_internal();
     }
 
     /// Squares this element.

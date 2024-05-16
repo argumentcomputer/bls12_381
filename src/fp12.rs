@@ -162,6 +162,44 @@ impl Fp12 {
         }
     }
 
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn mul_inp(&mut self, other: &Fp12) {
+        let aa = self.c0 * other.c0;
+        let bb = self.c1 * other.c1;
+        self.c1.add_inp(&self.c0);
+        let mut o = other.c0;
+        o.add_inp(&other.c1);
+        self.c1 *= o;
+        self.c1.sub_inp(&aa);
+        self.c1.sub_inp(&bb);
+        self.c0 = bb.mul_by_nonresidue_owned();
+        self.c0.add_inp(&aa);
+    }
+
+    #[inline]
+    fn mul(&self, other: &Fp12) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                out.mul_inp(other);
+                out
+            } else {
+                let aa = self.c0 * other.c0;
+                let bb = self.c1 * other.c1;
+                let c1 = self.c1 + self.c0;
+                let o = other.c0 + other.c1;
+                let c1 = c1 * o;
+                let c1 = c1 - aa;
+                let c1 = c1 - bb;
+                let c0 = bb.mul_by_nonresidue();
+                let c0 = c0 + aa;
+
+                Fp12 { c0, c1 }
+            }
+        }
+    }
+
     /// Raises this element to p.
     #[inline(always)]
     pub fn frobenius_map(&self) -> Self {
@@ -190,6 +228,40 @@ impl Fp12 {
             });
 
         Fp12 { c0, c1 }
+    }
+
+    /// Raises this element to p.
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn frobenius_map_inp(&mut self) {
+        self.c0.frobenius_map_inp();
+        self.c1.frobenius_map_inp();
+
+        const C1_MUL: Fp6 = Fp6 {
+            c0: Fp2 {
+                c0: Fp::from_raw_unchecked([
+                    0x0708_9552_b319_d465,
+                    0xc669_5f92_b50a_8313,
+                    0x97e8_3ccc_d117_228f,
+                    0xa35b_aeca_b2dc_29ee,
+                    0x1ce3_93ea_5daa_ce4d,
+                    0x08f2_220f_b0fb_66eb,
+                ]),
+                c1: Fp::from_raw_unchecked([
+                    0xb2f6_6aad_4ce5_d646,
+                    0x5842_a06b_fc49_7cec,
+                    0xcf48_95d4_2599_d394,
+                    0xc11b_9cba_40a8_e8d0,
+                    0x2e38_13cb_e5a0_de89,
+                    0x110e_efda_8884_7faf,
+                ]),
+            },
+            c1: Fp2::zero(),
+            c2: Fp2::zero(),
+        };
+
+        // c1 = c1 * (u + 1)^((p - 1) / 6)
+        self.c1 *= C1_MUL;
     }
 
     #[inline]
@@ -237,17 +309,7 @@ impl<'a, 'b> Mul<&'b Fp12> for &'a Fp12 {
 
     #[inline]
     fn mul(self, other: &'b Fp12) -> Self::Output {
-        let aa = self.c0 * other.c0;
-        let bb = self.c1 * other.c1;
-        let o = other.c0 + other.c1;
-        let c1 = self.c1 + self.c0;
-        let c1 = c1 * o;
-        let c1 = c1 - aa;
-        let c1 = c1 - bb;
-        let c0 = bb.mul_by_nonresidue();
-        let c0 = c0 + aa;
-
-        Fp12 { c0, c1 }
+        self.mul(other)
     }
 }
 

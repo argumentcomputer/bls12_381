@@ -165,6 +165,23 @@ impl Fp6 {
         }
     }
 
+    /// Multiply by quadratic nonresidue v.
+    #[cfg(target_os = "zkvm")]
+    pub fn mul_by_nonresidue_owned(self) -> Self {
+        // Given a + bv + cv^2, this produces
+        //     av + bv^2 + cv^3
+        // but because v^3 = u + 1, we have
+        //     c(u + 1) + av + v^2
+        let Fp6 { c0, c1, mut c2 } = self;
+        c2.mul_by_nonresidue_inp();
+
+        Fp6 {
+            c0: c2,
+            c1: c0,
+            c2: c1,
+        }
+    }
+
     /// Raises this element to p.
     #[inline(always)]
     pub fn frobenius_map(&self) -> Self {
@@ -201,6 +218,45 @@ impl Fp6 {
             };
 
         Fp6 { c0, c1, c2 }
+    }
+
+    /// Raises this element to p.
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn frobenius_map_inp(&mut self) {
+        self.c0.frobenius_map_inp();
+        self.c1.frobenius_map_inp();
+        self.c2.frobenius_map_inp();
+
+        const C1_MUL: Fp2 = Fp2 {
+            c0: Fp::zero(),
+            c1: Fp::from_raw_unchecked([
+                0xcd03_c9e4_8671_f071,
+                0x5dab_2246_1fcd_a5d2,
+                0x5870_42af_d385_1b95,
+                0x8eb6_0ebe_01ba_cb9e,
+                0x03f9_7d6e_83d0_50d2,
+                0x18f0_2065_5463_8741,
+            ]),
+        };
+
+        const C2_MUL: Fp2 = Fp2 {
+            c0: Fp::from_raw_unchecked([
+                0x890d_c9e4_8675_45c3,
+                0x2af3_2253_3285_a5d5,
+                0x5088_0866_309b_7e2c,
+                0xa20d_1b8c_7e88_1024,
+                0x14e4_f04f_e2db_9068,
+                0x14e5_6d3f_1564_853a,
+            ]),
+            c1: Fp::zero(),
+        };
+
+        // c1 = c1 * (u + 1)^((p - 1) / 3)
+        self.c1.mul_inp(&C1_MUL);
+
+        // c2 = c2 * (u + 1)^((2p - 2) / 3)
+        self.c2.mul_inp(&C2_MUL);
     }
 
     #[inline(always)]
@@ -250,10 +306,23 @@ impl Fp6 {
         // Each of these is a "sum of products", which we can compute efficiently.
 
         let a = self;
-        let b10_p_b11 = b.c1.c0 + b.c1.c1;
-        let b10_m_b11 = b.c1.c0 - b.c1.c1;
-        let b20_p_b21 = b.c2.c0 + b.c2.c1;
-        let b20_m_b21 = b.c2.c0 - b.c2.c1;
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut b10_p_b11 = b.c1.c0;
+                b10_p_b11.add_inp(&b.c1.c1);
+                let mut b10_m_b11 = b.c1.c0;
+                b10_m_b11.sub_inp(&b.c1.c1);
+                let mut b20_p_b21 = b.c2.c0;
+                b20_p_b21.add_inp(&b.c2.c1);
+                let mut b20_m_b21 = b.c2.c0;
+                b20_m_b21.sub_inp(&b.c2.c1)
+            } else {
+                let b10_p_b11 = b.c1.c0 + b.c1.c1;
+                let b10_m_b11 = b.c1.c0 - b.c1.c1;
+                let b20_p_b21 = b.c2.c0 + b.c2.c1;
+                let b20_m_b21 = b.c2.c0 - b.c2.c1;
+            }
+        }
 
         Fp6 {
             c0: Fp2 {

@@ -153,12 +153,25 @@ impl Fp2 {
         self.conjugate()
     }
 
+    /// Raises this element to p.
+    #[inline]
+    pub fn frobenius_map_inp(&mut self) {
+        // This is always just a conjugation. If you're curious why, here's
+        // an article about it: https://alicebob.cryptoland.net/the-frobenius-endomorphism-with-finite-fields/
+        self.conjugate_inp()
+    }
+
     #[inline(always)]
     pub fn conjugate(&self) -> Self {
         Fp2 {
             c0: self.c0,
             c1: -self.c1,
         }
+    }
+
+    #[inline]
+    pub fn conjugate_inp(&mut self) {
+        self.c1 = -self.c1;
     }
 
     #[inline]

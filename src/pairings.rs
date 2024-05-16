@@ -48,55 +48,128 @@ impl MillerLoopResult {
     pub fn final_exponentiation(&self) -> Gt {
         #[must_use]
         fn fp4_square(a: Fp2, b: Fp2) -> (Fp2, Fp2) {
-            let t0 = a.square();
-            let t1 = b.square();
-            let mut t2 = t1.mul_by_nonresidue();
-            let c0 = t2 + t0;
-            t2 = a + b;
-            t2 = t2.square();
-            t2 -= t0;
-            let c1 = t2 - t1;
-
-            (c0, c1)
+            cfg_if::cfg_if! {
+                if #[cfg(target_os = "zkvm")] {
+                    // c0 = b.square().mul_by_nonresidue() + a.square()
+                    // c1 = (a + b).square() - a.square() - b.square()
+                    let mut t0 = a;
+                    t0.square_inp();
+                    let mut c0 = b;
+                    c0.square_inp();
+                    let mut c1 = a;
+                    c1.add_inp(&b);
+                    c1.square_inp();
+                    c1.sub_inp(&t0);
+                    c1.sub_inp(&c0);
+                    c0.mul_by_nonresidue_inp();
+                    c0.add_inp(&t0);
+                    (c0, c1)
+                } else {
+                    let t0 = a.square();
+                    let t1 = b.square();
+                    let mut t2 = t1.mul_by_nonresidue();
+                    let c0 = t2 + t0;
+                    t2 = a + b;
+                    t2 = t2.square();
+                    t2 -= t0;
+                    let c1 = t2 - t1;
+                    (c0, c1)
+                }
+            }
         }
         // Adaptation of Algorithm 5.5.4, Guide to Pairing-Based Cryptography
         // Faster Squaring in the Cyclotomic Subgroup of Sixth Degree Extensions
         // https://eprint.iacr.org/2009/565.pdf
         #[must_use]
         fn cyclotomic_square(f: Fp12) -> Fp12 {
-            let mut z0 = f.c0.c0;
-            let mut z4 = f.c0.c1;
-            let mut z3 = f.c0.c2;
-            let mut z2 = f.c1.c0;
-            let mut z1 = f.c1.c1;
-            let mut z5 = f.c1.c2;
+            let Fp12 {
+                c0:
+                    Fp6 {
+                        c0: mut z0,
+                        c1: mut z4,
+                        c2: mut z3,
+                    },
+                c1:
+                    Fp6 {
+                        c0: mut z2,
+                        c1: mut z1,
+                        c2: mut z5,
+                    },
+            } = f;
 
             let (t0, t1) = fp4_square(z0, z1);
 
             // For A
-            z0 = t0 - z0;
-            z0 = z0 + z0 + t0;
+            cfg_if::cfg_if! {
+                if #[cfg(target_os = "zkvm")] {
+                    z0 = -z0;
+                    z0.add_inp(&t0);
+                    z0.double_inp();
+                    z0.add_inp(&t0);
 
-            z1 = t1 + z1;
-            z1 = z1 + z1 + t1;
+                    z1.add_inp(&t1);
+                    z1.double_inp();
+                    z1.add_inp(&t1);
+                } else {
+                    z0 = t0 - z0;
+                    z0 = z0 + z0 + t0;
 
-            let (mut t0, t1) = fp4_square(z2, z3);
-            let (t2, t3) = fp4_square(z4, z5);
+                    z1 = t1 + z1;
+                    z1 = z1 + z1 + t1;
+                }
+            }
+
+            cfg_if::cfg_if! {
+                if #[cfg(target_os = "zkvm")] {
+                    let (t0, t1) = fp4_square(z2, z3);
+                    let (t2, mut t3) = fp4_square(z4, z5);
+                } else {
+                    let (mut t0, t1) = fp4_square(z2, z3);
+                    let (t2, t3) = fp4_square(z4, z5);
+                }
+            }
 
             // For C
-            z4 = t0 - z4;
-            z4 = z4 + z4 + t0;
+            cfg_if::cfg_if! {
+                if #[cfg(target_os = "zkvm")] {
+                    z4 = -z4;
+                    z4.add_inp(&t0);
+                    z4.double_inp();
+                    z4.add_inp(&t0);
 
-            z5 = t1 + z5;
-            z5 = z5 + z5 + t1;
+                    z5.add_inp(&t1);
+                    z5.double_inp();
+                    z5.add_inp(&t1);
+                } else {
+                    z4 = t0 - z4;
+                    z4 = z4 + z4 + t0;
+
+                    z5 = t1 + z5;
+                    z5 = z5 + z5 + t1;
+                }
+            }
 
             // For B
-            t0 = t3.mul_by_nonresidue();
-            z2 = t0 + z2;
-            z2 = z2 + z2 + t0;
+            cfg_if::cfg_if! {
+                if #[cfg(target_os = "zkvm")] {
+                    t3.mul_by_nonresidue_inp();
+                    z2.add_inp(&t3);
+                    z2.double_inp();
+                    z2.add_inp(&t3);
 
-            z3 = t2 - z3;
-            z3 = z3 + z3 + t2;
+                    z3 = -z3;
+                    z3.add_inp(&t2);
+                    z3.double_inp();
+                    z3.add_inp(&t2);
+                } else {
+                    t0 = t3.mul_by_nonresidue();
+                    z2 = t0 + z2;
+                    z2 = z2 + z2 + t0;
+
+                    z3 = t2 - z3;
+                    z3 = z3 + z3 + t2;
+                }
+            }
 
             Fp12 {
                 c0: Fp6 {
@@ -111,49 +184,155 @@ impl MillerLoopResult {
                 },
             }
         }
+        #[cfg(target_os = "zkvm")]
+        fn cyclotomic_square_inp(f: &mut Fp12) {
+            // z0: f.c0.c0
+            // z1: f.c1.c1
+            // z2: f.c1.c0
+            // z3: f.c0.c2
+            // z4: f.c0.c1
+            // z5: f.c1.c2
+
+            let (t0, t1) = fp4_square(f.c0.c0, f.c1.c1);
+
+            // For A
+            f.c0.c0 = -f.c0.c0;
+            f.c0.c0.add_inp(&t0);
+            f.c0.c0.double_inp();
+            f.c0.c0.add_inp(&t0);
+
+            f.c1.c1.add_inp(&t1);
+            f.c1.c1.double_inp();
+            f.c1.c1.add_inp(&t1);
+
+            let (t0, t1) = fp4_square(f.c1.c0, f.c0.c2);
+            let (t2, mut t3) = fp4_square(f.c0.c1, f.c1.c2);
+
+            // For C
+            f.c0.c1 = -f.c0.c1;
+            f.c0.c1.add_inp(&t0);
+            f.c0.c1.double_inp();
+            f.c0.c1.add_inp(&t0);
+
+            f.c1.c2.add_inp(&t1);
+            f.c1.c2.double_inp();
+            f.c1.c2.add_inp(&t1);
+
+            // For B
+            t3.mul_by_nonresidue_inp();
+            f.c1.c0.add_inp(&t3);
+            f.c1.c0.double_inp();
+            f.c1.c0.add_inp(&t3);
+
+            f.c0.c2 = -f.c0.c2;
+            f.c0.c2.add_inp(&t2);
+            f.c0.c2.double_inp();
+            f.c0.c2.add_inp(&t2);
+        }
         #[must_use]
-        fn cycolotomic_exp(f: Fp12) -> Fp12 {
+        fn cycolotomic_exp(f: &Fp12) -> Fp12 {
             let x = BLS_X;
             let mut tmp = Fp12::one();
             let mut found_one = false;
             for i in (0..64).rev().map(|b| ((x >> b) & 1) == 1) {
                 if found_one {
-                    tmp = cyclotomic_square(tmp)
+                    cfg_if::cfg_if! {
+                        if #[cfg(target_os = "zkvm")] {
+                            cyclotomic_square_inp(&mut tmp);
+                        } else {
+                            tmp = cyclotomic_square(tmp);
+                        }
+                    }
                 } else {
                     found_one = i;
                 }
 
                 if i {
-                    tmp *= f;
+                    cfg_if::cfg_if! {
+                        if #[cfg(target_os = "zkvm")] {
+                            tmp.mul_inp(f);
+                        } else {
+                            tmp *= f;
+                        }
+                    }
                 }
             }
 
             tmp.conjugate()
         }
 
-        let mut f = self.0;
-        let mut t0 = f
-            .frobenius_map()
-            .frobenius_map()
-            .frobenius_map()
-            .frobenius_map()
-            .frobenius_map()
-            .frobenius_map();
-        Gt(f.invert()
-            .map(|mut t1| {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut t0 = self.0;
+                t0.frobenius_map_inp();
+                t0.frobenius_map_inp();
+                t0.frobenius_map_inp();
+                t0.frobenius_map_inp();
+                t0.frobenius_map_inp();
+                t0.frobenius_map_inp();
+
+                let mut t2 = self.0.invert().unwrap();
+                t2.mul_inp(&t0);
+                let mut t1 = t2;
+                t2.frobenius_map_inp();
+                t2.frobenius_map_inp();
+                t2.mul_inp(&t1);
+                t1 = cyclotomic_square(t2);
+                t1.conjugate_inp();
+                let mut t3 = cycolotomic_exp(&t2);
+                let mut t4 = cyclotomic_square(t3);
+                let mut t5 = t1;
+                t5.mul_inp(&t3);
+                t1 = cycolotomic_exp(&t5);
+                t0 = cycolotomic_exp(&t1);
+                let mut t6 = cycolotomic_exp(&t0);
+                t6.mul_inp(&t4);
+                t4 = cycolotomic_exp(&t6);
+                t5.conjugate_inp();
+                t4.mul_inp(&t5);
+                t4.mul_inp(&t2);
+                t1.mul_inp(&t2);
+                t2.conjugate_inp();
+                t1.frobenius_map_inp();
+                t1.frobenius_map_inp();
+                t1.frobenius_map_inp();
+                t6.mul_inp(&t2);
+                t6.frobenius_map_inp();
+                t3.mul_inp(&t0);
+                t3.frobenius_map_inp();
+                t3.frobenius_map_inp();
+                t3.mul_inp(&t1);
+                t3.mul_inp(&t6);
+                t3.mul_inp(&t4);
+                Gt(t3)
+            } else {
+                let mut t0 = self
+                    .0
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map();
+
+                // We unwrap() because `MillerLoopResult` can only be constructed
+                // by a function within this crate, and we uphold the invariant
+                // that the enclosed value is nonzero.
+                let mut t1 = self.0.invert().unwrap();
+
                 let mut t2 = t0 * t1;
                 t1 = t2;
                 t2 = t2.frobenius_map().frobenius_map();
                 t2 *= t1;
                 t1 = cyclotomic_square(t2).conjugate();
-                let mut t3 = cycolotomic_exp(t2);
+                let mut t3 = cycolotomic_exp(&t2);
                 let mut t4 = cyclotomic_square(t3);
                 let mut t5 = t1 * t3;
-                t1 = cycolotomic_exp(t5);
-                t0 = cycolotomic_exp(t1);
-                let mut t6 = cycolotomic_exp(t0);
+                t1 = cycolotomic_exp(&t5);
+                t0 = cycolotomic_exp(&t1);
+                let mut t6 = cycolotomic_exp(&t0);
                 t6 *= t4;
-                t4 = cycolotomic_exp(t6);
+                t4 = cycolotomic_exp(&t6);
                 t5 = t5.conjugate();
                 t4 *= t5 * t2;
                 t5 = t2.conjugate();
@@ -165,14 +344,9 @@ impl MillerLoopResult {
                 t3 = t3.frobenius_map().frobenius_map();
                 t3 *= t1;
                 t3 *= t6;
-                f = t3 * t4;
-
-                f
-            })
-            // We unwrap() because `MillerLoopResult` can only be constructed
-            // by a function within this crate, and we uphold the invariant
-            // that the enclosed value is nonzero.
-            .unwrap())
+                Gt(t3 * t4)
+            }
+        }
     }
 }
 

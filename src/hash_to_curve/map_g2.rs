@@ -455,14 +455,14 @@ pub fn iso_map(u: &G2Projective) -> G2Projective {
     const COEFFS: [&[Fp2]; 4] = [&ISO3_XNUM, &ISO3_XDEN, &ISO3_YNUM, &ISO3_YDEN];
 
     // unpack input point
-    let G2Projective { x, y, z } = *u;
+    let G2Projective { x, y, z } = u;
 
     // xnum, xden, ynum, yden
     let mut mapvals = [Fp2::zero(); 4];
 
     // compute powers of z
     let zsq = z.square();
-    let zpows = [z, zsq, zsq * z];
+    let zpows = [*z, zsq, zsq * z];
 
     // compute map value by Horner's rule
     for idx in 0..4 {

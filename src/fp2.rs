@@ -48,7 +48,11 @@ impl From<Fp> for Fp2 {
 
 impl ConstantTimeEq for Fp2 {
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.c0.ct_eq(&other.c0) & self.c1.ct_eq(&other.c1)
+        if self.c0 == other.c0 && self.c1 == other.c1 {
+            Choice::from(1)
+        } else {
+            Choice::from(0)
+        }
     }
 }
 
@@ -62,9 +66,10 @@ impl PartialEq for Fp2 {
 
 impl ConditionallySelectable for Fp2 {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Fp2 {
-            c0: Fp::conditional_select(&a.c0, &b.c0, choice),
-            c1: Fp::conditional_select(&a.c1, &b.c1, choice),
+        if bool::from(choice) {
+            *b
+        } else {
+            *a
         }
     }
 }
@@ -401,49 +406,49 @@ impl Fp2 {
         // with constant time modifications.
 
         CtOption::new(Fp2::zero(), self.is_zero()).or_else(|| {
-            // a1 = self^((p - 3) / 4)
-            let a1 = self.pow_vartime(&[
-                0xee7f_bfff_ffff_eaaa,
-                0x07aa_ffff_ac54_ffff,
-                0xd9cc_34a8_3dac_3d89,
-                0xd91d_d2e1_3ce1_44af,
-                0x92c6_e9ed_90d2_eb35,
-                0x0680_447a_8e5f_f9a6,
-            ]);
+        // a1 = self^((p - 3) / 4)
+        let a1 = self.pow_vartime(&[
+            0xee7f_bfff_ffff_eaaa,
+            0x07aa_ffff_ac54_ffff,
+            0xd9cc_34a8_3dac_3d89,
+            0xd91d_d2e1_3ce1_44af,
+            0x92c6_e9ed_90d2_eb35,
+            0x0680_447a_8e5f_f9a6,
+        ]);
 
-            // alpha = a1^2 * self = self^((p - 3) / 2 + 1) = self^((p - 1) / 2)
-            let alpha = a1.square() * self;
+        // alpha = a1^2 * self = self^((p - 3) / 2 + 1) = self^((p - 1) / 2)
+        let alpha = a1.square() * self;
 
-            // x0 = self^((p + 1) / 4)
-            let x0 = a1 * self;
+        // x0 = self^((p + 1) / 4)
+        let x0 = a1 * self;
 
-            // In the event that alpha = -1, the element is order p - 1 and so
-            // we're just trying to get the square of an element of the subfield
-            // Fp. This is given by x0 * u, since u = sqrt(-1). Since the element
-            // x0 = a + bu has b = 0, the solution is therefore au.
+        // In the event that alpha = -1, the element is order p - 1 and so
+        // we're just trying to get the square of an element of the subfield
+        // Fp. This is given by x0 * u, since u = sqrt(-1). Since the element
+        // x0 = a + bu has b = 0, the solution is therefore au.
             CtOption::new(
                 Fp2 {
-                    c0: -x0.c1,
-                    c1: x0.c0,
+                c0: -x0.c1,
+                c1: x0.c0,
                 },
                 alpha.ct_eq(&(&Fp2::one()).neg()),
             )
-            // Otherwise, the correct solution is (1 + alpha)^((q - 1) // 2) * x0
+        // Otherwise, the correct solution is (1 + alpha)^((q - 1) // 2) * x0
             .or_else(|| {
                 CtOption::new(
                     (alpha + Fp2::one()).pow_vartime(&[
-                        0xdcff_7fff_ffff_d555,
-                        0x0f55_ffff_58a9_ffff,
-                        0xb398_6950_7b58_7b12,
-                        0xb23b_a5c2_79c2_895f,
-                        0x258d_d3db_21a5_d66b,
-                        0x0d00_88f5_1cbf_f34d,
+            0xdcff_7fff_ffff_d555,
+            0x0f55_ffff_58a9_ffff,
+            0xb398_6950_7b58_7b12,
+            0xb23b_a5c2_79c2_895f,
+            0x258d_d3db_21a5_d66b,
+            0x0d00_88f5_1cbf_f34d,
                     ]) * x0,
                     Choice::from(1),
                 )
             })
-            // Only return the result if it's really the square root (and so
-            // self is actually quadratic nonresidue)
+        // Only return the result if it's really the square root (and so
+        // self is actually quadratic nonresidue)
             .and_then(|sqrt| CtOption::new(sqrt, sqrt.square().ct_eq(self)))
         })
     }
@@ -914,8 +919,8 @@ fn test_sqrt() {
                 0x13e1_c895_cc4b_6c22,
             ])
         }
-        .sqrt()
-        .is_none()
+            .sqrt()
+            .is_none()
     ));
 }
 
@@ -987,7 +992,7 @@ fn test_lexicographic_largest() {
                 0x1333_f55a_3572_5be0,
             ]),
         }
-        .lexicographically_largest()
+            .lexicographically_largest()
     ));
     assert!(!bool::from(
         Fp2 {
@@ -1008,7 +1013,7 @@ fn test_lexicographic_largest() {
                 0x1333_f55a_3572_5be0,
             ]),
         }
-        .lexicographically_largest()
+            .lexicographically_largest()
     ));
     assert!(!bool::from(
         Fp2 {
@@ -1022,7 +1027,7 @@ fn test_lexicographic_largest() {
             ]),
             c1: Fp::zero(),
         }
-        .lexicographically_largest()
+            .lexicographically_largest()
     ));
     assert!(bool::from(
         Fp2 {
@@ -1036,7 +1041,7 @@ fn test_lexicographic_largest() {
             ]),
             c1: Fp::zero(),
         }
-        .lexicographically_largest()
+            .lexicographically_largest()
     ));
 }
 

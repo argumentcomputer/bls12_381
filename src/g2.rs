@@ -85,10 +85,10 @@ impl ConstantTimeEq for G2Affine {
 
 impl ConditionallySelectable for G2Affine {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        G2Affine {
-            x: Fp2::conditional_select(&a.x, &b.x, choice),
-            y: Fp2::conditional_select(&a.y, &b.y, choice),
-            infinity: Choice::conditional_select(&a.infinity, &b.infinity, choice),
+        if bool::from(choice) {
+            *b
+        } else {
+            *a
         }
     }
 }
@@ -567,10 +567,10 @@ impl ConstantTimeEq for G2Projective {
 
 impl ConditionallySelectable for G2Projective {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        G2Projective {
-            x: Fp2::conditional_select(&a.x, &b.x, choice),
-            y: Fp2::conditional_select(&a.y, &b.y, choice),
-            z: Fp2::conditional_select(&a.z, &b.z, choice),
+        if bool::from(choice) {
+            *b
+        } else {
+            *a
         }
     }
 }

@@ -36,7 +36,11 @@ impl zeroize::DefaultIsZeroes for MillerLoopResult {}
 
 impl ConditionallySelectable for MillerLoopResult {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        MillerLoopResult(Fp12::conditional_select(&a.0, &b.0, choice))
+        if choice.into() {
+            *b
+        } else {
+            *a
+        }
     }
 }
 
@@ -84,17 +88,17 @@ impl MillerLoopResult {
         fn cyclotomic_square(f: Fp12) -> Fp12 {
             let Fp12 {
                 c0:
-                    Fp6 {
-                        c0: mut z0,
-                        c1: mut z4,
-                        c2: mut z3,
-                    },
+                Fp6 {
+                    c0: mut z0,
+                    c1: mut z4,
+                    c2: mut z3,
+                },
                 c1:
-                    Fp6 {
-                        c0: mut z2,
-                        c1: mut z1,
-                        c2: mut z5,
-                    },
+                Fp6 {
+                    c0: mut z2,
+                    c1: mut z1,
+                    c2: mut z5,
+                },
             } = f;
 
             let (t0, t1) = fp4_square(z0, z1);
@@ -407,7 +411,11 @@ impl ConstantTimeEq for Gt {
 
 impl ConditionallySelectable for Gt {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Gt(Fp12::conditional_select(&a.0, &b.0, choice))
+        if bool::from(choice) {
+            *b
+        } else {
+            *a
+        }
     }
 }
 
@@ -1215,7 +1223,7 @@ fn test_multi_miller_loop() {
         (&a4, &b4_prepared),
         (&a5, &b5_prepared),
     ])
-    .final_exponentiation();
+        .final_exponentiation();
 
     assert_eq!(expected, test);
 }
@@ -1256,7 +1264,7 @@ fn tricking_miller_loop_result() {
             (&G1Affine::generator(), &G2Affine::generator().into()),
             (&-G1Affine::generator(), &G2Affine::generator().into())
         ])
-        .0,
+            .0,
         Fp12::one()
     );
     assert_eq!(
@@ -1264,7 +1272,7 @@ fn tricking_miller_loop_result() {
             (&G1Affine::generator(), &G2Affine::generator().into()),
             (&-G1Affine::generator(), &G2Affine::generator().into())
         ])
-        .final_exponentiation(),
+            .final_exponentiation(),
         Gt::identity()
     );
 }

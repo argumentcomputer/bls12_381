@@ -67,10 +67,10 @@ impl fmt::Debug for Fp6 {
 impl ConditionallySelectable for Fp6 {
     #[inline(always)]
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Fp6 {
-            c0: Fp2::conditional_select(&a.c0, &b.c0, choice),
-            c1: Fp2::conditional_select(&a.c1, &b.c1, choice),
-            c2: Fp2::conditional_select(&a.c2, &b.c2, choice),
+        if bool::from(choice) {
+            *b
+        } else {
+            *a
         }
     }
 }
@@ -78,7 +78,11 @@ impl ConditionallySelectable for Fp6 {
 impl ConstantTimeEq for Fp6 {
     #[inline(always)]
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.c0.ct_eq(&other.c0) & self.c1.ct_eq(&other.c1) & self.c2.ct_eq(&other.c2)
+        if self.c0 == other.c0 && self.c1 == other.c1 && self.c2 == other.c2 {
+            Choice::from(1)
+        } else {
+            Choice::from(0)
+        }
     }
 }
 

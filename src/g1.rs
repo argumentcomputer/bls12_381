@@ -93,10 +93,10 @@ impl ConstantTimeEq for G1Affine {
 
 impl ConditionallySelectable for G1Affine {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        G1Affine {
-            x: Fp::conditional_select(&a.x, &b.x, choice),
-            y: Fp::conditional_select(&a.y, &b.y, choice),
-            infinity: Choice::conditional_select(&a.infinity, &b.infinity, choice),
+        if bool::from(choice) {
+            *b
+        } else {
+            *a
         }
     }
 }
@@ -579,10 +579,10 @@ impl ConstantTimeEq for G1Projective {
 
 impl ConditionallySelectable for G1Projective {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        G1Projective {
-            x: Fp::conditional_select(&a.x, &b.x, choice),
-            y: Fp::conditional_select(&a.y, &b.y, choice),
-            z: Fp::conditional_select(&a.z, &b.z, choice),
+        if bool::from(choice) {
+            *b
+        } else {
+            *a
         }
     }
 }

@@ -10,17 +10,18 @@ on:
 
 jobs:
   check-downstream-compiles:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-16x
     strategy:
       fail-fast: false
       matrix:
         include:
           - repo: sphinx
-            path: ""
           - repo: zk-light-clients
             path: aptos
+            features: aptos
           - repo: zk-light-clients
             path: ethereum
+            features: ethereum
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,9 +30,14 @@ jobs:
       - uses: ./ci-workflows/.github/actions/ci-env
       - uses: actions/checkout@v4
         with:
-          path: ${{ github.workspace }}/sphinx
+          path: ${{ github.workspace }}/bls12_381
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Set `zk-light-clients` env
+        if: ${{ matrix.repo == 'zk-light-clients' }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y build-essential pkg-config libssl-dev libudev-dev cmake clang
+          echo "RUSTFLAGS=${{ env.RUSTFLAGS }} --cfg tokio_unstable" | tee -a $GITHUB_ENV
       - uses: actions/checkout@v4
         with:
           repository: argumentcomputer/${{ matrix.repo }}
@@ -41,3 +47,4 @@ jobs:
         with:
           upstream-path: "bls12_381"
           downstream-path: "${{ matrix.repo }}/${{ matrix.path }}"
+          features: "${{ matrix.features }}"

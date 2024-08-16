@@ -66,6 +66,11 @@ version = "1.4"
 default-features = false
 optional = true
 
+[dependencies.sphinx-zkvm]
+git = "https://github.com/argumentcomputer/sphinx"
+branch = "dev"
+optional = true
+
 [features]
 default = ["groups", "pairings", "alloc", "bits"]
 bits = ["ff/bits"]
@@ -74,3 +79,4 @@ pairings = ["groups", "pairing"]
 alloc = ["group/alloc"]
 experimental = ["digest"]
 nightly = ["subtle/nightly"]
+zkvm = ["dep:sphinx-zkvm"]

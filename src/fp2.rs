@@ -455,7 +455,7 @@ impl Fp2 {
                     sqrt_opt.map(|root| {
                         buf[0..48].copy_from_slice(&root.c0.to_bytes());
                         buf[48..96].copy_from_slice(&root.c1.to_bytes());
-                        buf[97] = 1; // Set the flag to 1 indicating the result is valid
+                        buf[96] = 1; // Set the flag to 1 indicating the result is valid
                     });
                     sphinx_precompiles::io::hint_slice(&buf);
                 }

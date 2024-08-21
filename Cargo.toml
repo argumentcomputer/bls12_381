@@ -66,6 +66,13 @@ version = "1.4"
 default-features = false
 optional = true
 
+# The sphinx-zkvm crate should only ever be a dependency in a target_os = zkvm context
+# See https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#platform-specific-dependencies
+# Sphinx imports bls12_381 in a non-zkvm context, and bls12_381 imported sphinx in that context, it
+# could create a circular dependency.
+[target.'cfg(target_os = "zkvm")'.dependencies]
+sphinx-precompiles = { git = "https://github.com/argumentcomputer/sphinx", branch = "dev" }
+
 [features]
 default = ["groups", "pairings", "alloc", "bits"]
 bits = ["ff/bits"]

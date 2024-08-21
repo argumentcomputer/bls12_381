@@ -177,6 +177,32 @@ impl<'a, 'b> Mul<&'b Fp> for &'a Fp {
 impl_binops_additive!(Fp, Fp);
 impl_binops_multiplicative!(Fp, Fp);
 
+macro_rules! sqrt_impl {
+    ($self:expr) => {
+        $self.pow_vartime(&[
+            0xee7f_bfff_ffff_eaab,
+            0x07aa_ffff_ac54_ffff,
+            0xd9cc_34a8_3dac_3d89,
+            0xd91d_d2e1_3ce1_44af,
+            0x92c6_e9ed_90d2_eb35,
+            0x0680_447a_8e5f_f9a6,
+        ])
+    };
+}
+
+macro_rules! invert_impl {
+    ($self:expr) => {
+        $self.pow_vartime(&[
+            0xb9fe_ffff_ffff_aaa9,
+            0x1eab_fffe_b153_ffff,
+            0x6730_d2a0_f6b0_f624,
+            0x6477_4b84_f385_12bf,
+            0x4b1b_a7b6_434b_acd7,
+            0x1a01_11ea_397f_e69a,
+        ])
+    };
+}
+
 impl Fp {
     /// Returns zero, the additive identity.
     #[inline]
@@ -346,32 +372,26 @@ impl Fp {
         // we only need to exponentiate by (p+1)/4. This only
         // works for elements that are actually quadratic residue,
         // so we check that we got the correct result at the end.
-
         cfg_if::cfg_if! {
-            // NOTE: the branches are meant to be identical except for the use of the unconstrained! macro
             if #[cfg(target_os = "zkvm")] {
-                    let sqrt = sphinx_zkvm::precompiles::unconstrained!(self.pow_vartime(&[
-                        0xee7f_bfff_ffff_eaab,
-                        0x07aa_ffff_ac54_ffff,
-                        0xd9cc_34a8_3dac_3d89,
-                        0xd91d_d2e1_3ce1_44af,
-                        0x92c6_e9ed_90d2_eb35,
-                        0x0680_447a_8e5f_f9a6,
-                    ]));
-            }
-            else {
-                let sqrt = self.pow_vartime(&[
-                    0xee7f_bfff_ffff_eaab,
-                    0x07aa_ffff_ac54_ffff,
-                    0xd9cc_34a8_3dac_3d89,
-                    0xd91d_d2e1_3ce1_44af,
-                    0x92c6_e9ed_90d2_eb35,
-                    0x0680_447a_8e5f_f9a6,
-                ]);
+                sphinx_precompiles::unconstrained! {
+                    let mut buf = [0u8; 48];
+                    let sqrt = sqrt_impl!(self);
+                    buf[0..48].copy_from_slice(&sqrt.to_bytes());
+                    sphinx_precompiles::io::hint_slice(&buf);
+                }
+
+                let byte_vec = sphinx_precompiles::io::read_vec();
+                let bytes: [u8; 48] = byte_vec.try_into().unwrap();
+                let root = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
+                CtOption::new(root, !self.is_zero() & (root * root).ct_eq(self))
+            } else {
+                let sqrt: Self = sqrt_impl!(self);
+                // Only return the result if it's really the square root (and so
+                // self is actually quadratic nonresidue)
+                CtOption::new(sqrt, sqrt.square().ct_eq(self))
             }
         }
-
-        CtOption::new(sqrt, sqrt.square().ct_eq(self))
     }
 
     #[inline]
@@ -380,30 +400,23 @@ impl Fp {
     /// is zero.
     pub fn invert(&self) -> CtOption<Self> {
         cfg_if::cfg_if! {
-            // NOTE: the branches are meant to be identical except for the use of the unconstrained! macro
             if #[cfg(target_os = "zkvm")] {
-                // Exponentiate by p - 2
-                let t = sphinx_zkvm::precompiles::unconstrained!(self.pow_vartime(&[
-                    0xb9fe_ffff_ffff_aaa9,
-                    0x1eab_fffe_b153_ffff,
-                    0x6730_d2a0_f6b0_f624,
-                    0x6477_4b84_f385_12bf,
-                    0x4b1b_a7b6_434b_acd7,
-                    0x1a01_11ea_397f_e69a,
-                ]));
+                // Compute the inverse using the zkvm syscall
+                sphinx_precompiles::unconstrained! {
+                    let mut buf = [0u8; 48];
+                    let inv = invert_impl!(self);
+                    buf[0..48].copy_from_slice(&inv.to_bytes());
+                    sphinx_precompiles::io::hint_slice(&buf);
+                }
 
-                CtOption::new(t, !self.is_zero() &&  (self.mul(&t)).ct_eq(&Fp::one()))
+                let byte_vec = sphinx_precompiles::io::read_vec();
+                let bytes: [u8; 48] = byte_vec.try_into().unwrap();
+                let inv = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
+                CtOption::new(inv, !self.is_zero() & (self * inv).ct_eq(&Fp::one()))
             }
             else {
                 // Exponentiate by p - 2
-                let t = self.pow_vartime(&[
-                    0xb9fe_ffff_ffff_aaa9,
-                    0x1eab_fffe_b153_ffff,
-                    0x6730_d2a0_f6b0_f624,
-                    0x6477_4b84_f385_12bf,
-                    0x4b1b_a7b6_434b_acd7,
-                    0x1a01_11ea_397f_e69a,
-                ]);
+                let t: Self = invert_impl!(self);
 
                 CtOption::new(t, !self.is_zero())
             }

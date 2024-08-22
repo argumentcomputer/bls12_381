@@ -742,8 +742,8 @@ mod tests {
 
     #[test]
     fn fuzz_mul_interleaved() {
+        let mut rng = rand_xorshift::XorShiftRng::from_seed(SEED);
         for _i in 0..TEST_ITER {
-            let mut rng = rand_xorshift::XorShiftRng::from_seed(SEED);
             let a = Fp6::random(&mut rng);
             let b = Fp6::random(&mut rng);
 

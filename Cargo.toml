@@ -71,7 +71,7 @@ optional = true
 # Sphinx imports bls12_381 in a non-zkvm context, and bls12_381 imported sphinx in that context, it
 # could create a circular dependency.
 [target.'cfg(target_os = "zkvm")'.dependencies]
-sphinx-precompiles = { git = "https://github.com/argumentcomputer/sphinx", branch = "dev" }
+sphinx-zkvm = { git = "https://github.com/argumentcomputer/sphinx", branch = "dev" }
 
 [features]
 default = ["groups", "pairings", "alloc", "bits"]

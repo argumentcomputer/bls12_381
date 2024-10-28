@@ -449,7 +449,7 @@ impl Fp2 {
         // with constant time modifications.
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                sphinx_precompiles::unconstrained! {
+                sphinx_lib::unconstrained! {
                     let mut buf = [0u8; 97]; // Allocate 97 bytes to include the flag
                     let sqrt_opt = sqrt_impl!(self);
                     sqrt_opt.map(|root| {
@@ -457,10 +457,10 @@ impl Fp2 {
                         buf[48..96].copy_from_slice(&root.c1.to_bytes());
                         buf[96] = 1; // Set the flag to 1 indicating the result is valid
                     });
-                    sphinx_precompiles::io::hint_slice(&buf);
+                    sphinx_lib::io::hint_slice(&buf);
                 }
 
-                let byte_vec = sphinx_precompiles::io::read_vec();
+                let byte_vec = sphinx_lib::io::read_vec();
                 let bytes: [u8; 97] = byte_vec.try_into().unwrap();
                 match bytes[96] {
                     0 => CtOption::new(Fp2::zero(), Choice::from(0u8)), // Return None if the flag is 0

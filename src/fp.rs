@@ -374,14 +374,14 @@ impl Fp {
         // so we check that we got the correct result at the end.
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                sphinx_precompiles::unconstrained! {
+                sphinx_lib::unconstrained! {
                     let mut buf = [0u8; 48];
                     let sqrt = sqrt_impl!(self);
                     buf[0..48].copy_from_slice(&sqrt.to_bytes());
-                    sphinx_precompiles::io::hint_slice(&buf);
+                    sphinx_lib::io::hint_slice(&buf);
                 }
 
-                let byte_vec = sphinx_precompiles::io::read_vec();
+                let byte_vec = sphinx_lib::io::read_vec();
                 let bytes: [u8; 48] = byte_vec.try_into().unwrap();
                 let root = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
                 CtOption::new(root, !self.is_zero() & (root * root).ct_eq(self))
@@ -402,14 +402,14 @@ impl Fp {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
                 // Compute the inverse using the zkvm syscall
-                sphinx_precompiles::unconstrained! {
+                sphinx_lib::unconstrained! {
                     let mut buf = [0u8; 48];
                     let inv = invert_impl!(self);
                     buf[0..48].copy_from_slice(&inv.to_bytes());
-                    sphinx_precompiles::io::hint_slice(&buf);
+                    sphinx_lib::io::hint_slice(&buf);
                 }
 
-                let byte_vec = sphinx_precompiles::io::read_vec();
+                let byte_vec = sphinx_lib::io::read_vec();
                 let bytes: [u8; 48] = byte_vec.try_into().unwrap();
                 let inv = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
                 CtOption::new(inv, !self.is_zero() & (self * inv).ct_eq(&Fp::one()))

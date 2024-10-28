@@ -72,6 +72,7 @@ optional = true
 # could create a circular dependency.
 [target.'cfg(target_os = "zkvm")'.dependencies]
 sphinx-zkvm = { git = "https://github.com/argumentcomputer/sphinx", branch = "dev" }
+sphinx-lib = { git = "https://github.com/argumentcomputer/sphinx", branch = "dev" }
 
 [features]
 default = ["groups", "pairings", "alloc", "bits"]
